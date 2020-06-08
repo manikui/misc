@@ -3,7 +3,7 @@
 
 ## Pandas
 
-```df``` is a Pandas dataframe, ```s``` is a Pandas series
+```df``` is a Pandas dataframe, ```s``` is a Pandas series, ```pd``` refers to the Pandas package that is typically imported in the following way: ```import pandas as pd```
 
 | Name | Description | Input Parameter(s) | Output |
 | -------- | -------- | -------- | -------- |
@@ -24,18 +24,13 @@
 | ```df.drop(columns = [list_of_column_names])``` | Removes all columns in ```list_of_column_names``` from ```df``` | ```list_of_column_names```: List of columns to drop | Pandas dataframe |
 | ```df.dropna()``` or ```s.dropna()``` | Removes all rows containing missing values from ```df``` or ```s``` | None | Pandas dataframe or series with all rows containing missing values removed|
 | ```df.dropna(axis = 1)``` | Removes all columns containing missing values from ```df``` or ```s``` | None | Pandas dataframe with all columns containing missing values removed|
-| ```df.rename(axis = 1)``` | Removes all columns containing missing values from ```df``` or ```s``` | None | Pandas dataframe with all columns containing missing values removed|
-
-
-Filtering
-
-Merge
-df.rename
-pd.isnull() | Checks for null Values, Returns Boolean Arrray
-
-df.group_by()
-
-
+| ```df.rename(dict, axis = 1)``` | Renames columns in ```df``` according to dictionary ```dict``` passed in | ```dict```: A dictionary mapping previous column values to new column values | Pandas dataframe with renamed columns|
+| ```df[bool_array]``` or ```df.loc[bool_array]```| Filters rows in ```df``` according to boolean array passed in | ```bool_array```: array of True or False values that correspond to whether a row is included or excluded in the dataframe. Common ```bool_array``` example: ```df[col_name] >= value``` | Pandas dataframe containing filtered rows|
+| ```df.groupby(column).function()```| Groups unique values in ```column``` together, then applies ```function()``` to them | ```column```: Name of column to group values over or list of column names; ```function()```: Aggregation function, typically ```mean()``` or ```count()``` | Pandas dataframe containing grouped values with each unique value getting 1 row|
+| ```pd.merge(left, right, how = "inner", on = col_name)```| Joins 2 dataframes ```left``` and ```right``` using their values in column ```a```. Requires both dataframes have a column named ```a```. | ```left, right```: Dataframes to merge; ```on```: Name of column containing values to merge | Pandas dataframe containing merged values from ```left``` and ```right```|
+| ```left.merge(right, how = "inner", left_on = left_col_name, right_on = right_col_name)```| Joins ```right``` dataframe on ```left``` using values in column ```left_col_name``` and ```right_col_name```. Does not require both dataframes have similarly-named columns. | ```left, right```: Dataframes to merge; ```left_on```: Name of column in ```left``` containing values to merge; ```right_on```: Name of column in ```right``` containing values to merge; | Pandas dataframe containing merged values from ```left``` and ```right```|
+| ```df.set_index(col_name)``` | Re-indexes ```df``` using values from ```col_name```. Note: this requires all values in ```col_name``` be unique | ```col_name```: Name of column that will be the new index | Pandas dataframe with ```col_name``` as the index|
+| ```pd.read_csv(file_name)``` | Reads in a CSV file located in ```file_name``` as a dataframe or series (if the CSV only has 1 column) | ```file_name```: Name of CSV file to be read in | Pandas series or dataframe |
 
 ## Numpy
 
