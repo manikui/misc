@@ -3,7 +3,7 @@
 ## Lecture 1
 - We want to represent the meaning of a word
     - Meaning: the idea that is represented by a word, signifier vs. signified
-- Usable meaning in a computer: use WordNet, a thesaurus containing lists of synonym sets and hypernyms ("is a" relationships): ```from ntlk.corupus import wordnet```
+- Usable meaning in a computer: use WordNet, a thesaurus containing lists of synonym sets and hypernyms ("is a" relationships): ```from ntlk.corpus import wordnet```
     - Problems: great as a resource but missing nuance (proficient as a synonym for good), missing new meanings of words (slang), subjective, requires human labor, can't compute word similarity as it has fixed synonym sets
 - Traditional NLP: we regard words as just words, discrete symbols - a localist representation where words are represented as one-hot vectors
     - Language has a lot of vocabulary: huge vector dimension
@@ -54,3 +54,39 @@
         - Where $\alpha_i = \dfrac{f_i}{\sum_{j}f_j}$ for frequency $f$
 
 ## Lecture 3
+- Softmax Classifier: $P(y|x) = \dfrac{\exp(W_y x)}{\sum_c \exp(W_c x)}$
+    - Essentially 2 steps: Take the ith row of $W$ and multiply that row with $x$ for all classes, then apply the softmax function with the normalization $\sum_c \exp(W_c x)$ to get a probability
+- For each training example $(x, y)$, our objective is to maximize the probability of the correct class $y$
+    - Corresponds to: $\max P(y|x) = \max \log(P(y|x)) = \min - \log(P(y|x))$
+- Cross entropy loss: for true probability distribution $p$ and computed probability distribution $q$, $H(p, q) = - \sum_c P(c) \log(q(c))$
+    - The true probability distribution for some point takes the form: $p = [0, ..., 0, 1, 0, ..., 0]$. Thus, plugging this into the cross-entropy loss yields a single non-zero term: the negative log probability of the true class
+    - $H(p, q) = -\log P(y|x)$
+- NLP deep learning:
+    - Learn both weights $W$ and word vectors $x$
+    - Learn both conventional parameters and word representations
+    - The word vectors re-represent one-hot vectors - move them around in an intermediate layer vector space
+- The loss function directs what the intermediate hidden variables should be, so as to do a good job at predicting the targest for the next layer, etc.
+- Neural networks require non-linear functions like sigmoid as with just linear functions, the networks can't model anything more than a linear transformation
+    - With more layers and non-linear functions, neural nets can approximate more complex functions
+- Named Entity Recognition (NER): finding and classifying names in text (organizations, places, people)
+    - Predict entities by classifying words in context (like Word2vec) and then within those extracted entities, combine them into subsequences
+        - Problems: boundaries of entity, hard to know if something is an entity ("Future School"), class of unknown/novel entity
+- We want to build classifiers of language that work inside a context window of neighboring words
+    - Simple solution: average the word vectors in a window and then classify the average vector
+        - Problem: loses position information
+    - Another solution: train softmax classifier to classify a center word by taking the concatenation of word vectors surrounding it in a window
+        - Treat all windows without a named entity in its center as "corrupt"
+        - Want a system that returns a high score if there is a named entity at the center 
+        - All the neural net does is return an unnormalized score for all combinations of concatenated word vectors
+        - The middle layer in the neural net learns non-linear interactions between the input word vectors
+        - Whole neural net: $x$ (input: concatenation of word vectors) $\rightarrow h = f(Wx + b) \rightarrow s = u^Th$
+        - Example gradient: $\dfrac{\partial s}{\partial b} = \dfrac{\partial s}{\partial h} \dfrac{\partial h}{\partial z} \dfrac{\partial z}{\partial b}= h^T \text{diag}(f'(z)) I = h^T \circ f'(z)$ 
+        - Similarly, $\dfrac{\partial s}{\partial W} = \dfrac{\partial s}{\partial h} \dfrac{\partial h}{\partial z} \dfrac{\partial z}{\partial W}$. The first two terms in the chain rule are the same
+        - We consider this repetition of gradients as the local error signal $\delta$, the computations in the neural net that are above where $W$ and $b$ are
+        - Just compute error signal once, reuse when computing lower-level partial derivatives
+        - $\delta = \dfrac{\partial s}{\partial h} \dfrac{\partial h}{\partial z} = h^T \circ f'(z)$
+        - Thus: $\dfrac{\partial s}{\partial W} = \dfrac{\partial s}{\partial h} \dfrac{\partial h}{\partial z} \dfrac{\partial z}{\partial W}= \delta \dfrac{\partial z}{\partial W} = \delta^T x^T$
+
+## Lecture 4
+
+
