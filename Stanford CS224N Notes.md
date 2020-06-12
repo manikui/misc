@@ -88,5 +88,30 @@
         - Thus: $\dfrac{\partial s}{\partial W} = \dfrac{\partial s}{\partial h} \dfrac{\partial h}{\partial z} \dfrac{\partial z}{\partial W}= \delta \dfrac{\partial z}{\partial W} = \delta^T x^T$
 
 ## Lecture 4
-
+- Derivative of a single weight $W_{ij}$: $W_{ij}$ only contributes to one output $z_i$
+- $\dfrac{\partial s}{\partial W_{ij}} = \delta_i x_j$, the error signal from above multiplied with the local gradient signal 
+- This gives the gradient for the full $W$ as $\delta^T x^T$
+- Backpropagation: taking derivatives and using the chain rule while re-using derivatives computed for higher layers in the computation of derivatives for lower layers
+    - Forward propagation: expression evaluation of $Wx + b = z \rightarrow f(z) = h \rightarrow u^Th = s$
+    - Backpropagation: pass gradients backwards along edges after forward pass
+    - Node receives an upstream gradient from the node after it (in terms of the forward pass) - the error signal from above, and it attempts to pass on the correct downstream gradient to the previous node using the local gradient signal and the error signal from above
+    - The local gradient signal is determined by the operation contained within the node, i.e. if the node is $h = f(z)$, the local gradient is $\dfrac{\partial h}{\partial z}$
+    - The downstream gradient then becomes the upstream gradient (the error signal from above) multipled by the local gradient: $\dfrac{\partial s}{\partial z} = \dfrac{\partial s}{\partial h} \dfrac{\partial h}{\partial z}$
+- Backpropagation with multiple downstream gradients to a node: $z = Wx$ - you'll have multiple local gradients that you multiply with the upstream gradient and send them back to their respective inputs: $\dfrac{\partial s}{\partial W} = \dfrac{\partial s}{\partial z}\dfrac{\partial z}{\partial W}$ and $\dfrac{\partial s}{\partial x} = \dfrac{\partial s}{\partial z}\dfrac{\partial z}{\partial x}$
+- Backpropagation with multiple upstream gradients to a node: sum the incoming gradients
+- Node intuitions:
+    - Summing the upstream gradients distribute them across the downstream gradients/branches
+    - Max routes them
+    - * switches
+- Do not calculate upstream gradients that were already completed, just use the upstream gradients entering the current node
+- General algorithm:
+    - Forwards prop: visit nodes in topological sort order: compute value of current node given predecessors
+    - Backwords prop:
+        - Initialize output gradients = 1
+        - Visit nodes in reverse order:
+            - Compute gradient wrt each node using upstream gradient from successors
+- Big O() complexity of fprop and bprop should be the same
+- Essential to initialize weights to small random values so as to avoid symmetries that hinder learning/specialization
+    - Can also use Xavier initialization: variance of random weight distribution inversely proportional to fan-in (previous layer size) and fan-out (next layer size): $\text{Var}(W_i) = \dfrac{2}{n_{\text{in}} + n_{\text{out}}}$
+- Use an adaptive optimizer like Adagrad or RMSprop that scale the learning rate and current iteration's gradient by the accumulated gradient
 
