@@ -115,3 +115,59 @@
     - Can also use Xavier initialization: variance of random weight distribution inversely proportional to fan-in (previous layer size) and fan-out (next layer size): $\text{Var}(W_i) = \dfrac{2}{n_{\text{in}} + n_{\text{out}}}$
 - Use an adaptive optimizer like Adagrad or RMSprop that scale the learning rate and current iteration's gradient by the accumulated gradient
 
+## Lecture 5
+- Phrase structure: sentences are built out of units that successively nest (organizes words into nested constitutents: words -> phrases -> bigger phrases -> sentences)
+- Determiners/articles: the, a
+- Noun: cat, dog
+- Context-free grammar rule: Noun phrase (NP) -> Determiner (Det) to Noun (N) or NP -> Det (Adj) N
+- Nested constituents: NP -> Det (Adj) N PP; PP -> Prep NP; reusing NP defined previously in a recursive way, making long sentences
+- Instead of having phrasal categories, directly represent sentence structure by saying how words depend on (modify or are arguments of) other words
+- "Look in the large crate in the kitchen by the door"
+    - "Look" is the root of the sentence
+    - "in the large crate" is dependent on "look"
+    - "the large" is a modifier of "crate", making it dependent on "crate"
+    - "in the kitchen" is a modifer of "crate", making it dependent on "crate"
+    - "in the" is dependent on "kitchen"
+    - "by the door" is a modifer of "crate" as well
+    - Identified how different parts of the sentence depend on each other
+- Prepositional phrase attachment can create ambiguities: a key parsing decision is how we attach various constituents
+    - "Shuttle veteran and longtime NASA executive Fred Gregory appointed to board": is Fred Gregory both or are there two different people being appointed?
+- Dependency syntax postulates that syntactic structure consists of relations between lexical items, normally binary asymmetric relations ("arrows") called dependencies
+    - The arrows are commonly typed with the name of grammatic relations (subject prepositional object, apposition, etc.)
+    - The entity at the top of the arrow is the head, and it is connected to the dependent (modifier)
+    - Usually, dependencies form a tree (connected, acyclic, single-head graph)
+- Sources of information for dependency parsing:
+    - Bilexical affinities: discussion -> issues
+    - Dependency distance: mostly with nearby words
+    - Intervening materials: dependencies rarely cross intervening verbs or punctuation
+    - Valency of heads: figuring out direction of dependency for a head ("was completed" implies only "was" is dependent on "completed", nothing else)
+- Dependency parsing:
+    - Each word is going to be dependent on another word or is the root (only one root)
+    - Don't want cycles, making dependencies a tree
+    - Can dependencies (arrows) cross: projective or non-projective?
+        - "Ill give a tak tomorrow on bootstrapping": talk -> give; "on bootstrapping" -> "talk"
+        - Constituents are delayed to the end of the sentence
+- One method: Transition-based parsing or deterministic dependency parsing
+    - Greedy choice of attachments guided by good machine learning classifiers
+    - "I ate fish"
+        - Start: stack([root]) buffer([I, ate, fish])
+        - Shift: stack([root, I]) buffer([ate, fish])
+        - Shift as "I" is not the head of the sentence: stack([root, I, ate]) buffer([fish])
+        - Left-arc reduction: stack([root, ate]) and dependency: ate -> I
+        - Shift: stack([root, ate, fish]) buffer([])
+        - Right-arc reduction: stack([root, ate]) and dependency: ate -> fish
+        - Right-arc reduction: stack([root]) and dependency: root -> ate
+        - Finish when buffer is empty
+        - Final dependency: root -> ate; ate -> I; ate -> fish
+- Improvement: Nivre's MaltParser:
+    - To decide whether to shift, left-arc or right-arc, use a discriminative classifier (softmax) 
+    - Provides very fast linear time parsing with great performance
+- Distributed representations:
+    - We represent each word as a d-dimensional dense vector (word embedding) where similar words are expected to have close vectors
+    - Add part-of-speech tages (nouns, verbs) and dependency labels as d-dimensional vectors
+    - Plural nouns (NNS) should be close to singular nouns (NN); numerical modifiers (num) should be close to adjective modifiers (amod)
+
+## Lecture 6
+
+
+
