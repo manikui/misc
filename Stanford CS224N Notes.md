@@ -244,12 +244,104 @@
     - Subcomponent of many NLP texts, especially those involving generating text or estimating the probability of text: predictive typing, speech recognition, handwriting recognition, spelling/grammar correction
 
 ## Lecture 7
+- Vanishing gradient:
+    - When you want to compute the gradient of the loss at some time step $t$ wrt a hidden layer at an earlier time step $t - 4$, and the intermediate gradients at $t-1$, $t-2$ and $t-3$ are small, then the gradient signal gets smaller and smaller (it accumulates) as it backpropagates further in time
+    - The magnitude of the gradient signal from close-by is larger than that from farther away -> hidden layer weights that are close-by have a larger say in loss calculation than farther away ones
+    - Model weights are updated only wrt near effects, and less so based on long-term effects
+    - Unable to learn a connection between two words that are placed far away
+    - We care about $\dfrac{\partial J}{\partial h}$ because the model weights $W$ are a function of the hidden layers $h$
+- Effect of vanishing gradient on RNN-LMs:
+    - Gradient can be viewed as a measure of the effect of the past on the future
+    - If the gradient becomes vanishingly small over longer distances, then we can't tell whether:
+        - There's no dependency between step $t$ and $t + n$ in the data (the provided task), there's no connection to be learnt
+        - We have wrong parameters to capture the true dependency between $t$ and $t+n$, there is a connection but we are unable to learn it
+    - Example: reference to tickets early in a sentence that is key to predicting the next word far later in the sequence
+        - The RNN-LM needs to model the dependency between "tickets" on the 7th step and the target word "tickets" far at the end
+        - If the gradient is small, the model can't learn this dependency -> it's unable to predict similar long-distance dependencies at test time
+    - Example: "The writer of the books __(is/are)__"
+        - Correct answer: is
+        - Brings up syntactic vs. sequential recency
+        - We care about syntactic recency, not sequential as the target word is singular due to the subject being singular. Sequential recency will focus on the plural "books" and select "are"
+        - RNN-LM are good at sequential recency due to vanishing gradients, there are weak signals from earlier words that are more important to syntactic recency
+- Exploding gradients:
+    - If the gradient becomes too big, then the SGD update step becomes too big, drastically changing the model parameters
+    - This can cause bad updates: we take too large a step and reach a bad parameter configuration with large loss
+    - Worst case: results in Inf or NaN in the network, forcing you to restart training from an earlier checkpoint
+- Solution: gradient clipping
+    - If the norm of the gradient is greater than some threshold, scale it down before applying SGD update
+    - if $||g|| >$ threshold: $g \leftarrow \dfrac{threshold}{||g||} g$
+    - Take a truncated step in the same direction
+- Solution to vanishing gradient:
+    - Main problem of vanishing gradients: it's too difficult for the RNN to learn to preserve information over many timesteps
+    - In a vanilla RNN, the hidden state is constantly being rewritten: $h^{(t)} = \sigma \left ( W_h h^{(t - 1)}) + W_x x^{(t)} + b \right )$
+    - Non-linearity makes it hard to preserve information from previous steps
+    - Can we create a RNN with separate memory? -> LSTM
+- Long Short-Term Memory (LSTM)
+    - A type of RNN that aims to solve the vanishing gradients problem
+    - Architecture:
+        - On step $t$, there is a hideen state $h^{(t)}$ and cell state $c^{(t)}$
+            - Both are vectors of length $n$
+            - The cell stores long-term information
+            - The LSTM can erase, write and read information from the cell
+        - Selection of which information is erased/written/read is controlled by three corresponding gates
+            - Also vectors of length $n$
+            - On each timestep, each element of the gates can be open (1), closed (0), or somewhere in-between
+            - If gate is open, information is passed through
+            - Gates are dynamic, their value is computed based on the current context
+            - Forget gate: controls what is kept vs. forgotten from previous cell state: $f^{(t)} = \sigma \left (W_f h^{(t - 1)} + U_f x^{(t)} + b_f \right) \in [0, 1]$
+            - Input gate: controls what parts of the new cell content are written to cell: $i^{(t)} = \sigma \left (W_i h^{(t - 1)} + U_i x^{(t)} + b_i \right) \in [0, 1]$
+            - Output gate: controls what parts of cell are output to hidden state: $o^{(t)} = \sigma \left (W_o h^{(t - 1)} + U_o x^{(t)} + b_o \right) \in [0, 1]$
+            - New cell content: the new content to be written to the cell: $c^{(t)} = \tanh \left (W_c h^{(t - 1)} + U_c x^{(t)} + b_c \right)$ 
+            - Update new cell content using gates: forget some content from last cell state $c^{(t - 1)}$ and write some new cell content: $c^{(t)} = f^{(t)} \circ c^{(t - 1)} + i^{(t)} \circ c^{(t)}$
+            - Pass cell content through $\tanh$ to get hidden state: $h^{(t)} = o^{(t)} \circ \tanh \left ( c^{(t)} \right )$
+            - Note: $\circ$ is element-wise product
+    - If the forget gate is set to remember everything on every timestep, then the info in the cell is preserved indefinitely
+    - LSTM doesn't guarantee there is no vanishing/exploding gradient, but it provides an easier way for the model to learn long-distance dependencies
+    - A lot of extra information to keep track of, but has done well on speech and handwriting recognition tasks
+- Gated Recurrent Units (GRU)
+    - Simpler alternative to LSTM but allows for long-term signals to persist
+    - Architecture:
+        - On each timestep $t$ we have input and a hidden state, no cell state
+        - Update gate: controls what parts of the previous hidden state are updated vs. preserved: $u^{(t)} = \sigma \left (W_u h^{(t - 1)} + U_u x^{(t)} + b_u \right) \in [0, 1]$
+        - Reset gate: controls what parts of the previous hidden state are used to compute new content: $r^{(t)} = \sigma \left (W_r h^{(t - 1)} + U_r x^{(t)} + b_r \right) \in [0, 1]$
+        - New hidden state content at timestep: reset gate selects useful parts of previous hudden state. Uses this and current input to compute new hidden state content $t$: $h^{(t)} = \tanh \left (W_h\left(r^{(t)} \circ h^{(t - 1)} \right )  + U_h x^{(t)} + b_h \right)$
+        - New hidden state: update gate simultaneouly controsl what is kept from previous hidden state, and what is updated to new hidden state content: $h^{(t)} = \left ( 1 - u^{(t)} \right ) \circ h^{(t - 1)} + u^{(t)} \circ h^{(t)}$, $u^{(t)}$ sets the balance between preserving things from previous hidden state vs. writing new things
+    - GRUs make it easier to retain information long-term, by setting the update gate ~ 0
+- LSTM vs. GRU:
+    - GRU is quicker to compute and has fewer parameters
+    - No conclusive endience that one consistently outperforms the other
+    - LSTM is a good default choice, especially if your data has particularly long dependencies, or if you have lots of training data as this will help felsh out the parameters morseo than GRU
+- Rule of thumb: start with LSTM, switch to GRU for more efficiency
+- Vanishing/exploding gradients are also prominent in feed-forward NNs and CNNs
+    - Due to chain rule/choice of nonlinearity, gradient can become vanishingly small as it backpropagates
+    - Thus, lower layers are learn very slowly, making the NN hard to train
+    - Solution: lots of new deep feedforward/CNN architehcures that add more direct connections, thereby alowing the gradient to flow
+- Residual connections (ResNet)
+    - Employs skip connections that bypass layers, preserving information by default, feeding the "identity connection" directly into a later layer (kind of like an extra bias term but using input from a previous layer)
+    - Skip layer is called an identity connection because it directly preserves information
+    - Makes deep networks much easier to train
+- Dense connections (DenseNet)
+    - Directly connect everything to everything
+- Highway connections (HighwayNet)
+    - Similar to residual connections, but how much of the identity connections factors into the transformation layer is controlled by a dynamic gate
+    - Inspired by LSTMs, but applied to deep feed-forward/CNNs
+- Though vanishing/exploding gradients are a general problem, RNNs are particularly unstable due to the repeated multiplication by the same weight matrix
+- Bidirectional RNNs
+    - ![](https://i.imgur.com/zu02hrX.png)
+    - ![](https://i.imgur.com/VxdXgEQ.png)
+    - Bidirectional RNNs are only application if you have access to the entire input sequence (you should use them by default)
+    - They are not applicable to Language Modeling, because you only have the left context available
+- Multi-layer RNNs (Stacked RNNs)
+    - RNNs are already deep in one dimension (along time)
+    - We can also make them "deep" by applying multiple RNNs at rach timestep, allowing the network to compute more complex representations
+    - Lower RNNs should compute lower-level features and the higher RNNs should compute higher-level features
+    - ![](https://i.imgur.com/vWhBkwf.png)
+- Paractical takeaways
+    - LSTMs are powerful but GRUs are faster
+    - Clip your gradients
+    - Use bidrectionality when possible (full input sequence available)
+    - Multi-layer RNNs are powerful, but you might need skip/dense connections if it's deep
 
-
-
-
-
-
-
+## Lecture 8
 
 
