@@ -343,5 +343,99 @@
     - Multi-layer RNNs are powerful, but you might need skip/dense connections if it's deep
 
 ## Lecture 8
+- Machine Translation (MT): translating a sentence x from one language (the source language) to a sentence y in another language (the target language)
+- Early MT: rule-based, using a bilingual dictionary to map Russian words to their English counterparts
+- Statistical MT: learn a probabilistic model from data
+    - We want to find the best English sentence y, given French sentence x: $\arg \max_y P(y|x)$
+    - Use Bayes' rule to break this down into two components to be learn separately: $\arg \max_y P(x|y) P(y)$
+        - $P(x|y)$: translation model - models how words and phrases should be translated (fidelity), learnt from parallel data
+        - $P(y)$: language model - models how to write good English (fluency), learnt from monolingual data
+    - To learn translation model:
+        - Need large amount of parallel data like pairs of human-translarted French/English sentences (parallel corpus)
+        - Consider $P(x, a|y)$ where $a$ is the alignment, i.e. the word-level correspondence between particular words in the translated sentence pair of French sentence $x$ and English sentence $y$
+            - Alignment can be many-to-one, one-to-many (fertile - many children), many-to-many (phrase-level translations)
+            - Parallel data allows SMT to learn alignment
+    - How to compute $\arg \max_y$:
+        - We could enumerate every possible $y$ and calculate the probability -> too expensive
+        - Solution - decoding: use a heuristic search algorithm to search for the best translation, discarding hypotheses that are too low-probability
+    - Huge research field, but the best systems were extremeley complex with many separately-designed subcomponents that required feature engineerings and extra resources
+- Neural Machine Translation (NMT)
+    - A way to do Machine Translation with a single neural network
+    - Used NN architecture called ssequence-to-sequence (seq2seq), which involves two RNNs (Encorder and Decoder RNN)
+    - Encoder RNN provides an encoding of the source sentence
+    - Decoder RNN is a LM that generates a target sentence, condition on the passed-in encoding (creates a probability distribution of the next possible words)
+    - ![](https://i.imgur.com/s6xIzz6.png)
+    - Feed source sentence into Encoder RNN, final encoding provides initial hidden state for Decoder RNN
+    - At test time: decoder output is fed into next step's input
+    - You can use seq2seq for summarization (long text -> short text), dialogue, parsing, code generation
+    - Seq2seq is an example of a conditional LM
+        - LM because the decoder is predicting the next word of the target sentence
+        - Conditional because its predictions are also conditioned on the source sentence
+    - NMT directly calculates $P(y|x)$ that SMT had to split into two parts: $P(y|x) = P(y_1|x)P(y_2|y_1, x)...P(y_T|y_1, ..., y_{T - 1}., x)$
+    - Training
+        - Feed source sentence into encoder RNN
+        - Then feed target sentence into decoder RNN using final hidden state of encoder RNN as initial hidden state of decoder
+        - For every step of decoder RNN, produce a probability distribution and compute loss
+        - Average all of the losses to get total loss for the target sentence
+    - Greedy decoding: take most probable word on each step of decoding RNN
+        - Problem: taking the $\arg \max$ of a specific word is not the same as the $\arg m\max$ over the whole sentence - it as no way to undo decisions
+        - Solution: beam search decoding
+            - On each step of decoder, keep track of the k most probable partial translations (hypotheses) where k is the beam size (typically 5-10)
+            - A hypothesis $y_1, ..., y_t$ has a score which is its log probability: $\text{score}(y_1, ..., y_t) = \sum_I{i = 1}^t \log P_{LM}(y_i | y_1, ... y_{i - 1}, x)$
+            - Scores are all negative so higher score is better
+            - We search for high-scoring hypotheses, keeping track of top $k$ on each step
+            - Once you have reached the stopping condition, backtrack from last word selected along all words until you reach the start token, using the following score: $\dfrac{1}{t} \sum_I{i = 1}^t \log P_{LM}(y_i | y_1, ... y_{i - 1}, x)$
+            - ![](https://i.imgur.com/56nB3vM.png)
+            - Stopping condition: different hypotheses may produce end tokens on different timesteps
+            - When a hypothesis produces an end token, that hypothesis is complete. Place it aside and continue exploring other hypotheses 
+            - Usually, we continue beam search until we reach timestep $T$ or we have at least $n$ completed hypotheses, both of which are pre-defined cutoffs
+            - Not guaranteed to find optimal solution, but is more efficient than exhaustive search
+    - Advantages of NMT
+        - Better performance, more fluent, better use of context
+        - It's a single NN that can be optimized end-to-end, without needing to individuallty optimize subcomponents
+        - Same method words for all language pairs, as long as you find a good parallel corpus
+    - Disadvantages of NMT
+        - NMTs are less interpretable: hard to debug
+        - Difficult to control: can't specify rules or guidelines to translation (e.g. always translate tahis word in a specific way)
+- Evaluating MTs
+    - Bilingual Evaluation Understudy (BLEU): compares the machine-written translation to one or more human-written translations, and computes a similarity score based on:
+        - n-gram precision by looking at all of the 1,2,3 and 4-grams that appear in each of the translations, and comparing how many of the n-grams that appeared in the machine translation were also present in the human translation 
+        - Additional brevity penalty for system translations that are too short
+    - BLEU is useful but imperfect
+        - There are many valid ways to translate a sentence
+        - A good translation can get a poor BLEU score because it has low n-gram overlap with the human translation
+- Continuing MT issues 
+    - Out-of-vocabulary words
+    - Domain mismatch between training and test data
+    - Maintaining context over longer text (articles, books, across paragraphs)
+    - Low-resource or small corpus language pairs (sometimes reliant on bible translations)
+    - Common sense is still hard
+    - NMT picks up biases in training data
+- Seq2seq: bottleneck problem
+    - The last hideen layer in the encoder RNN needs to capture all of the information about the source sentence, as it is going to be passed into the decoder RNN
+    - The last sentence forms an information bottleneck
+- Solution to the bottleneck problem: Attention
+    - On each step of the decoder, use direct connetion to the encoder to focus on a particular part of the source sentence
+    - For each decoder step, creae an attention score by taking the dot product with each step in the source sentence
+    - Then, take softmax to turn all of the scores into a probability distribution
+    - On that decoder step, the probability mass distribution will determine where the encoder RNN will focus
+    - Then, use the attention distribution to take a weighted sum of the encoder hidden states. The attention output contains information from the hidden states that received high attention
+    - ![](https://i.imgur.com/ITswLgW.png)
+    - Concatenate attention output with decoder hidden state, then compute probability distribution to sample next word in the decoder RNN
+    - ![](https://i.imgur.com/x5pPiBK.png)
+- Attention significantly improves NMT performance
+    - Very useful to allow decoder to focus on certain parts of the source
+    - Solves the bottleneck problem
+    - Helps with vanishing gradient problem
+    - Provides interpretability by inspecting attention distribution to see what the decoder was focusing on
+    - Get alignment for free: no need to define the notion of alignment as the network just learns it by itself
+- Attention is a general Deep Learning technique
+    - More general definition of attention: given a set of vector values and a vector query, attention is a technique to compute a weighted sum of the values, dependent on the query
+    - The query is attending to the values
+    - In seq2seq, each decoder hidden state (query) attends to all of the encoder hidden states at the same time (values)
+    - The weighted sum is a selective summary of the information contained in the values. The probability distribution on the values (attention distribution), allows the query to determine which values to focus on
+    - A way to obtain a fixed-size representation of an arbitrary set of representations
+    - ![](https://i.imgur.com/cVYbu1g.png)
+    - ![](https://i.imgur.com/EXLsYii.png)
 
-
+## Lecture 9
