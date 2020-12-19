@@ -5,9 +5,10 @@
     - Meaning: the idea that is represented by a word, signifier vs. signified
 - Usable meaning in a computer: use WordNet, a thesaurus containing lists of synonym sets and hypernyms ("is a" relationships): ```from ntlk.corpus import wordnet```
     - Problems: great as a resource but missing nuance (proficient as a synonym for good), missing new meanings of words (slang), subjective, requires human labor, can't compute word similarity as it has fixed synonym sets
-- Traditional NLP: we regard words as just words, discrete symbols - a localist representation where words are represented as one-hot vectors
+- Traditional NLP (up to 2012): we regard words as just words, discrete symbols - a localist representation where words are represented as one-hot vectors (one 1, many 0s in the vector where 1 = the target word and dimension = size of vocabulary)
     - Language has a lot of vocabulary: huge vector dimension
-    - We want to understand relationships in the meaning of words e.g. search for "Seattle motel" should match with "Seattle hotel" $\rightarrow$ traditional NLP would have these two vectors as orthogonal, no natural notion of similarity when you have one-hot vectors
+    - We want to understand relationships in the meaning of words e.g. search for "Seattle motel" should match with "Seattle hotel" $\rightarrow$ traditional NLP would have these two vectors (one for "Seattle", another for "motel") as orthogonal $\Rightarrow$ no natural notion of similarity when you have one-hot vectors
+    - ![](https://i.imgur.com/PNGjxen.png)
         - Could rely on WordNet's list of synonyms but this could fail due to incompleteness or size
     - Solution: learn to encode similarity in the vectors themselves
 - Representing words by their **context**: distributional semantics
@@ -15,33 +16,47 @@
     - If you can explain what context is correct for a certain word, then you understand the meaning of the word
     - When a word $w$ appears in a text, its context is the set of words that appear nearby within a fixed-size window
     - Use the many contexts of $w$ to build up a representation of $w$
-- Word vectors: instead of having spare one-hot vectors, we will build dense vectors for each word, chosen so that it is similar to vectors of words that appear in similar contexts - a distribution representation. It will be of a smaller dimension
+    - All could be useful to understand the meaning of "banking": ![](https://i.imgur.com/VFnyQMw.png)
+- Word vectors: instead of having sparse one-hot vectors (a localist representation of a word), we will build dense vectors for each word (a distributed representation), chosen so that it is similar to vectors of words that appear in similar contexts - a distribution representation. It will be of a smaller dimension
+    - All elements in the vector will be non-zero: ![](https://i.imgur.com/pxQzcAT.png)
+    - Can then place words within a vector space wherein distance becomes a measure of similarity
+    - Dimension of vector space can be determined by a learning algorithm
 - Word2vec algorithm: a framework for leaning word vectors
     - We have a large corpus of text. Every word in a fixed vocabulary is represented by a vector. Go through each position $t$ in the text, which has a center word $c$ and context ("outside") words around it $o$
     - Use the similarity of the word vectors for $c$ and $o$ to calculate $P(o | c)$. Keep adjusting the word vectors to maximize this probability
-    - Eventually you'll get a word vectors space with distance as a measure of similarity
+    - Eventually you'll get a word vectors space of some dimension determined by the algorithm with distance as a measure of similarity
+    - ![](https://i.imgur.com/JX5fjzX.png)
+    - Iterate through each of the words in the sentence
     - Likelihood $L(\theta) = \Pi_{t = 1}^T \Pi_{-m \leq j \leq m; j \neq 0} P(w_{t + J} | w_t; \theta)$
     - Objective function $J(\theta) = -\dfrac{1}{T} \sum_{t = 1}^T \sum_{-m \leq j \leq m; j \neq 0} \log P(w_{t+j}|w_t; \theta)$
     - Calculate $P(w_{t+j}|w_t; \theta)$ using two vectors per word: $v_w$ when $w$ is the center word and $u_w$ when $w$ is a context word
-    - For a center word $c$ and a context word $o$: $P(o|c) = \dfrac{\exp(u_o^Tv_c)}{\sum_{w \in V} \exp(u_w^Tv_c)}$, an example of the softmax function that maps arbitrary values $x_i$ to a probability distribution $p_i$
+    - For a center word $c$ and a context word $o$: $P(o|c) = \dfrac{\exp(u_o^Tv_c)}{\sum_{w \in V} \exp(u_w^Tv_c)}$, an example of the softmax function that maps arbitrary values $x_i$ to a probability distribution $p_i$ $\Rightarrow$ picking out the words that are most likely to be similar within a distribution of words in the corpus
     - $u_o^Tv_c$ is a measure of similarity between $o$ and $c$ where larger dot product means more similarity and thus larger probability
     - $\sum_{w \in V} \exp(u_w^Tv_c)$ normalizes over entire vocabulary to give probability distribution
-    - Optimize using $\theta = \left [v_{\text{aardvark}}, ..., v_{\text{zebra}}, u_{\text{aardvark}}, ..., y_{\text{zebra}} \right ]$. Thus, $\theta \in \mathbb{R}^{2dV}$ for $d$-dimensional vectors and $V$ words
-    - $\dfrac{\partial}{\partial v_c} \log P(o | c) = u_o - \sum_{x = 1}^V P(x | c) u_x = u_o - E[x | c]$
+    - Optimize using $\theta = \left [v_{\text{aardvark}}, ..., v_{\text{zebra}}, u_{\text{aardvark}}, ..., y_{\text{zebra}} \right ]$. Thus, $\theta \in \mathbb{R}^{2dV}$, containing 2 $d$-dimensional vectors each for $V$ words, which is passed into our likelihood function
+    - Slope in our multi-dimensional word vector space, what direction to move in to improve our model's predictive ability: $\dfrac{\partial}{\partial v_c} \log P(o | c) = u_o - \sum_{x = 1}^V P(x | c) u_x = u_o - E[x | c]$ = Difference between actual context word and expected
+    - Use gradient descent to update word vectors from their randomized initial states
+    - **End result of Word2vec:** a vector space with distance between word vectors indicating similarity, maximizing objective function places similar words nearby
 
 ## Lecture 2
 - Word vector space also has a notion of vector composition, or analogy: "king" vector - "man" vector + "woman" vector = "queen" vector $\rightarrow$ king:man as is queen:woman; australia:beer as is france:champange
-- Word2vec aims to provide a reasonably high probability estimate to all words that occur in the context
+- Word2vec aims to provide a reasonably high probability estimate to all words that occur in a given context
 - Word2vec maximizes objective function by putting similar words nearby in space
-- Need to use stochasitc gradient descent as the objective is a function of all windows in the corpus, making it expensive to compute
+- Need to use stochastic gradient descent as the objective is a function of all windows in the corpus, making it expensive to compute
     - Take a minibatch of words from the corpus and compute the gradient on those
     - End up with a sparse gradient vector as you are only selecting a few words from the entire corpus at each iteration
         - Solution: either use sparse matrix updates to only update certain rows of full embedding matrices U and V, or keep around a hash for word vectors
-- Can also capture co-occurence counts: fill a co-occurence matrix X using a window around each word type (word token - fruits instead of a specific fruit), counting up the number of times each word appears within that window
-    - X is symmetric and sparse
-    - Can measure similarity directly using the counts
-    - Problems: X becomes huge with vocabulary increases, sparsity
-    - Solution: low rank approximation using SVD that preserves most of the information
+- Can also use word vectors derived from co-occurence counts: fill a co-occurence matrix $X$ using a window around each word type (word token - fruits instead of a specific fruit), counting up the number of times each word appears within that window, can skip over common words like "I, and, or, ..."
+    - ![](https://i.imgur.com/ZmEXwya.png)
+    - $X$ is symmetric and sparse
+    - Can measure similarity directly using the vectors' dot product
+    - Problems: $X$ becomes huge with vocabulary increases, mostly sparse
+    - Solution: low rank approximation using SVD that preserves most of the information in the original matrix (retain only first k singular vectors where $\hat X \in \mathbb{R}^k$ is the best rank-k approximation of $X \in \mathbb{R}^n$)
+    - Hacks to improve performance: log transform counts, weight words closer together more, non-negaive Pearson correlation instead of counts
+    - Can end up resulting in useful word vectors that are somewhat similar to what you get from Word2Vec
+    - Conventional methods can yield useful vector spaces
+    - GloVe: ratios of co-occurence probabilities can encode meaning components
+        - ![](https://i.imgur.com/0BVKpSO.png)
 - Evaluating word vectors: intrinsic vs. extrinsic
     - Intrinsic: are you guessing the right part of speech? Are you returning the correct synonyms? Evaluation on a specific/intermediate subtask, fast to compute, helps to understand that system
     - Extrinsic: evaluation on a real task (some application that human beings use like web search or phone dialogue), can take a long time to compute accuracy, unclear if the subsystem is the problem or its interaction or other subsystems
@@ -55,81 +70,134 @@
 
 ## Lecture 3
 - Softmax Classifier: $P(y|x) = \dfrac{\exp(W_y x)}{\sum_c \exp(W_c x)}$
-    - Essentially 2 steps: Take the ith row of $W$ and multiply that row with $x$ for all classes, then apply the softmax function with the normalization $\sum_c \exp(W_c x)$ to get a probability
-- For each training example $(x, y)$, our objective is to maximize the probability of the correct class $y$
+    - Essentially 2 steps: Take the ith row of weight matrix $W$ and multiply that row with $x$ for all classes, then apply the softmax function with the normalization $\sum_c \exp(W_c x)$ to get a probability
+- For each training example $(x, y)$, our objective is to maximize the probability of the correct class $y$ or equivalently, minimize the negative log probability of the correct class
     - Corresponds to: $\max P(y|x) = \max \log(P(y|x)) = \min - \log(P(y|x))$
-- Cross entropy loss: for true probability distribution $p$ and computed probability distribution $q$, $H(p, q) = - \sum_c P(c) \log(q(c))$
+- Cross entropy loss: for true probability distribution $p$ and computed probability distribution $q$: $H(p, q) = - \sum_c P(c) \log(q(c))$
     - The true probability distribution for some point takes the form: $p = [0, ..., 0, 1, 0, ..., 0]$. Thus, plugging this into the cross-entropy loss yields a single non-zero term: the negative log probability of the true class
     - $H(p, q) = -\log P(y|x)$
-- NLP deep learning:
-    - Learn both weights $W$ and word vectors $x$
-    - Learn both conventional parameters and word representations
-    - The word vectors re-represent one-hot vectors - move them around in an intermediate layer vector space
-- The loss function directs what the intermediate hidden variables should be, so as to do a good job at predicting the targest for the next layer, etc.
-- Neural networks require non-linear functions like sigmoid as with just linear functions, the networks can't model anything more than a linear transformation
-    - With more layers and non-linear functions, neural nets can approximate more complex functions
+- When classifying over a whole dataset, take the average cross entropy loss
+- Why use Neural networks?
+    - Need to have classifiers that create non-linear decision boundaries
+    - Softmax classifiers create linear decision boundaries whereas neural nets are a family of classifiers that produce non-linear decision boundaries
+- Important distinctions from normal ML:
+    - Previous discussion about word vectors revealed that we can decide the real number entries within the vector to capture what we are interested in (meaning, analogy, etc.) $\rightarrow$ move the word vector around the vector space to a place that makes sense ("representation learning")
+    - Instead of just having to learn a weight matrix $W$, we also get to adjust the inputs (word vectors) $x$
+    - Learn both conventional (model, NN) parameters and word representations
+- Neural networks basics:
+    - Neuron takes in an n-dimensional input vector $x$, multiplies it by a weight vector associated with that specific neuron $w$, sums the scaled output, then adds a bias term $b$. Last, this weighted sum is passed through a non-linear activation function like sigmoid or ReLu to produce the output signal $a$: $a = \frac{1}{1 + \exp \left(-(w^Tx + b) \right)}$
+    - Extending this to $m$ different neurons, we have $m$ output activations: ![](https://i.imgur.com/xu4QbmD.png)
+    - To simplify, let $z_i = w^{(i)T}x + b^{(i)}$ for the ith neuron. Thus: ![](https://i.imgur.com/QXdUDcf.png)
+    - The vector of output activations $a$ can then be written as: ![](https://i.imgur.com/Jo5pJ5L.png) This will be passed onto the next layer
+    - The loss function directs what the intermediate hidden variables should be, so as to do a good job at predicting the targest for the next layer, etc.
+    - Neural networks require non-linear activation functions like sigmoid as with just linear functions, the networks can't model anything more than a linear transformation
+        - With more layers and non-linear functions, neural nets can approximate more complex functions
+        - As you add more layers with their own weights $W_1, W_2, ...$, the network will be able to approximate more complex functions and output increasingly non-linear decision boundaries. However, we can still represent these layers as a linear transformation on $x$: $W_1W_2x = W_x$ 
 - Named Entity Recognition (NER): finding and classifying names in text (organizations, places, people)
-    - Predict entities by classifying words in context (like Word2vec) and then within those extracted entities, combine them into subsequences
-        - Problems: boundaries of entity, hard to know if something is an entity ("Future School"), class of unknown/novel entity
+    - Run a classifer that goes through the words one at a time (each word is a word in a context - like Word2Vec), assigning a type to each of them (organization, person, location, etc.)
+    - Then the problem becomes picking out the named entities within each of these subsequences, i.e. some named entities have multiple words
+        - Problems: boundaries of entity, hard to know if something is an entity ("Future School"), class of unknown/novel entity, entity class is ambiguous and depends on context (Charles Schwab as a person or company)
 - We want to build classifiers of language that work inside a context window of neighboring words
     - Simple solution: average the word vectors in a window and then classify the average vector
-        - Problem: loses position information
-    - Another solution: train softmax classifier to classify a center word by taking the concatenation of word vectors surrounding it in a window
+        - Problem: loses position information, you don't know which of those word vectors is the one you're meant to be classifying
+    - Another solution: train softmax classifier to classify a center word by taking the concatenation of word vectors surrounding it in a window, i.e. with window of 5 words, $x = x_{\text{window}} \in \mathbb{R}^{5d}$ and update the word vectors during gradient descent
+    - More complicated solution: binary classification with unnormalized scores 
         - Treat all windows without a named entity in its center as "corrupt"
         - Want a system that returns a high score if there is a named entity at the center 
         - All the neural net does is return an unnormalized score for all combinations of concatenated word vectors
-        - The middle layer in the neural net learns non-linear interactions between the input word vectors
-        - Whole neural net: $x$ (input: concatenation of word vectors) $\rightarrow h = f(Wx + b) \rightarrow s = u^Th$
-        - Example gradient: $\dfrac{\partial s}{\partial b} = \dfrac{\partial s}{\partial h} \dfrac{\partial h}{\partial z} \dfrac{\partial z}{\partial b}= h^T \text{diag}(f'(z)) I = h^T \circ f'(z)$ 
-        - Similarly, $\dfrac{\partial s}{\partial W} = \dfrac{\partial s}{\partial h} \dfrac{\partial h}{\partial z} \dfrac{\partial z}{\partial W}$. The first two terms in the chain rule are the same
+        - The middle layer in the neural net learns non-linear interactions between the input word vectors, i.e. if the first word is like "museum" and the second word is a preposition like "in", then it's a good indication that the center word is a location like "Paris"
+        - Whole neural net: $x$ (input: concatenation of word vectors) $\rightarrow a = f(Wx + b) \rightarrow s = U^Ta$, the score of whether the center word is a named entity and $U$ is the weight matrix for that final layer
+        - Example gradient: $\dfrac{\partial s}{\partial b} = \dfrac{\partial s}{\partial a} \dfrac{\partial a}{\partial z} \dfrac{\partial z}{\partial b}= U^T \text{diag}(f'(z)) I = U^T \circ f'(z)$ 
+        - Similarly, $\dfrac{\partial s}{\partial W} = \dfrac{\partial s}{\partial a} \dfrac{\partial a}{\partial z} \dfrac{\partial z}{\partial W}$. The first two terms in the chain rule are the same
         - We consider this repetition of gradients as the local error signal $\delta$, the computations in the neural net that are above where $W$ and $b$ are
         - Just compute error signal once, reuse when computing lower-level partial derivatives
-        - $\delta = \dfrac{\partial s}{\partial h} \dfrac{\partial h}{\partial z} = h^T \circ f'(z)$
-        - Thus: $\dfrac{\partial s}{\partial W} = \dfrac{\partial s}{\partial h} \dfrac{\partial h}{\partial z} \dfrac{\partial z}{\partial W}= \delta \dfrac{\partial z}{\partial W} = \delta^T x^T$
+        - $\delta = \dfrac{\partial s}{\partial a} \dfrac{\partial a}{\partial z} = U^T \circ f'(z)$
+        - Thus: $\dfrac{\partial s}{\partial W} = \dfrac{\partial s}{\partial a} \dfrac{\partial a}{\partial z} \dfrac{\partial z}{\partial W}= \delta \dfrac{\partial z}{\partial W} = \delta^T x^T$
 
 ## Lecture 4
 - Derivative of a single weight $W_{ij}$: $W_{ij}$ only contributes to one output $z_i$
-- $\dfrac{\partial s}{\partial W_{ij}} = \delta_i x_j$, the error signal from above multiplied with the local gradient signal 
+- $\dfrac{\partial s}{\partial W_{ij}} = \delta_i x_j$, the error signal from above ($\delta_i$) multiplied with the local gradient signal 
 - This gives the gradient for the full $W$ as $\delta^T x^T$
+- Now for updating the word vectors:
+    - The gradient that arrives at and updates the word vectors can simply be split up for each word vector
+    - $\nabla_x J = W^T\delta = \delta_{x_{\text{window}}} \in \mathbb{R}^{5d}$ where $\delta_{x_{\text{window}}, i}$ = $\nabla_{x_{i}}$ for word $i$ in window, the update to that word vector
+    - This should push word vectors around so that they will be more helpful in determining named entities
+    - Ex: the model can learn that seeing $x_{\text{in}}$ as the word just before the center is indicative of the center word being a location
+    - However, it doesn't always work, specifically when synonyms for the word are split between training/test sets
+        - While training the model, it will move around the synonym in the training set but the test set stay where they are, resulting in a divergence of meaning wrt the vector space
+        - If we had not updated the word vectors while training, assuming they had come from a word embedding sytem beforehand, then the classifier would do a better job
+    - What to do:
+        - Always use pre-trained word vectors as they are always trained on a huge amount of data - they are already robust to words in/out of your training data
+        - Update ("fine tune") your word vectors during training if you have a large dataset
 - Backpropagation: taking derivatives and using the chain rule while re-using derivatives computed for higher layers in the computation of derivatives for lower layers
-    - Forward propagation: expression evaluation of $Wx + b = z \rightarrow f(z) = h \rightarrow u^Th = s$
-    - Backpropagation: pass gradients backwards along edges after forward pass
-    - Node receives an upstream gradient from the node after it (in terms of the forward pass) - the error signal from above, and it attempts to pass on the correct downstream gradient to the previous node using the local gradient signal and the error signal from above
-    - The local gradient signal is determined by the operation contained within the node, i.e. if the node is $h = f(z)$, the local gradient is $\dfrac{\partial h}{\partial z}$
-    - The downstream gradient then becomes the upstream gradient (the error signal from above) multipled by the local gradient: $\dfrac{\partial s}{\partial z} = \dfrac{\partial s}{\partial h} \dfrac{\partial h}{\partial z}$
-- Backpropagation with multiple downstream gradients to a node: $z = Wx$ - you'll have multiple local gradients that you multiply with the upstream gradient and send them back to their respective inputs: $\dfrac{\partial s}{\partial W} = \dfrac{\partial s}{\partial z}\dfrac{\partial z}{\partial W}$ and $\dfrac{\partial s}{\partial x} = \dfrac{\partial s}{\partial z}\dfrac{\partial z}{\partial x}$
-- Backpropagation with multiple upstream gradients to a node: sum the incoming gradients
+    - Forward propagation: expression evaluation of $z = Wx + b \rightarrow a = f(z) \rightarrow s = U^Ta$
+    - Backpropagation: pass gradients backwards along edges after forward pass (using chain rule)
+        - Node receives an upstream gradient from the node after it (in terms of the forward pass)
+        - This is the error signal from above, and it attempts to pass on the correct downstream gradient to the previous node using the local gradient signal and the error signal from above
+        - The local gradient signal is determined by the operation contained within the node, i.e. if the node is $h = f(z)$, the local gradient is $\dfrac{\partial h}{\partial z}$
+        - The downstream gradient then becomes the upstream gradient (the error signal from above) multipled by the local gradient: $\dfrac{\partial s}{\partial z} = \dfrac{\partial s}{\partial h} \dfrac{\partial h}{\partial z}$
+    - Backpropagation with multiple downstream gradients to a node: $z = Wx$ - you'll have multiple local gradients that you multiply with the upstream gradient and send them back to their respective inputs: $\dfrac{\partial s}{\partial W} = \dfrac{\partial s}{\partial z}\dfrac{\partial z}{\partial W}$ and $\dfrac{\partial s}{\partial x} = \dfrac{\partial s}{\partial z}\dfrac{\partial z}{\partial x}$
+    - Backpropagation with multiple upstream gradients returning to a node: sum the incoming gradients
 - Node intuitions:
     - Summing the upstream gradients distribute them across the downstream gradients/branches
-    - Max routes them
-    - * switches
-- Do not calculate upstream gradients that were already completed, just use the upstream gradients entering the current node
+    - Max routes upstream gradients to only one of the downstream gradients
+    - * switches between downstream gradients
+- Do not calculate upstream gradients that were already completed, only use the upstream gradient(s) entering the current node, don't bother with further upstream gradients that you should already have calculated
 - General algorithm:
-    - Forwards prop: visit nodes in topological sort order: compute value of current node given predecessors
-    - Backwords prop:
+    - Initialize all wieghts to small random values
+    - Forwards prop: visit nodes in topological sort order: compute value of current node given predecessors, resulting in a singular scalar output (run through operations from first layer to last, outputting loss at the end)
+    - Backwards prop (from loss, compute gradients according to operation within each node, going from last layer to first, passing gradients along as you propagate backwards):
         - Initialize output gradients = 1
         - Visit nodes in reverse order:
             - Compute gradient wrt each node using upstream gradient from successors
 - Big O() complexity of fprop and bprop should be the same
+- NNs have a huge number of weights $\rightarrow$ regularization over all parameters is super important, especially for deep/powerful nets which tend to overfit
+    - Powerful NNs can memorize training data if left to train long enough, leading to massive overfitting
+- Different non-linear activation functions
+    - ![](https://i.imgur.com/iljPtW4.png)
+    - Sigmoid was default but no longer en vogue
+    - ![](https://i.imgur.com/rLsIp9T.png)
+    - Tanh has been foudn to covnerge faster than sigmoid in practice, outputs range from -1 to 1
+    - ![](https://i.imgur.com/KRLrOSO.png)
+    - Hard Tanh is computationally cheaper than Tanh but saturates for magnitudes of $z > 1$
+    - ![](https://i.imgur.com/apfTYyp.png)
+    - ![](https://i.imgur.com/aXuPPlg.png)
+    - ReLu does not saturate even for larger values of $z$
+    - ![](https://i.imgur.com/rU9z3Tb.png)
+    - Leaky/Parametric ReLu: ![](https://i.imgur.com/hy8uZJg.png)
+        - Traditional ReLu does not propagate any error for non-positive $z$, but Leaky/Parametric ReLu allows for a small proportion of the error to propagate backwards even whn $z$ is negative
+        - ![](https://i.imgur.com/G0K2YiJ.png)
 - Essential to initialize weights to small random values so as to avoid symmetries that hinder learning/specialization
     - Can also use Xavier initialization: variance of random weight distribution inversely proportional to fan-in (previous layer size) and fan-out (next layer size): $\text{Var}(W_i) = \dfrac{2}{n_{\text{in}} + n_{\text{out}}}$
-- Use an adaptive optimizer like Adagrad or RMSprop that scale the learning rate and current iteration's gradient by the accumulated gradient
+        - Seeks to keep gradient within region where activation function will pass on gradient, i.e. not too big or small
+- Use an adaptive optimizer like Adagrad, RMSprop, Adam (a good place to start) that scale the learning rate and current iteration's gradient by the accumulated gradient
+- Learning rate must be correct to an order of magnitude
+    - Better results can be obtained by allowing learning rates to decrease per epoch
 
 ## Lecture 5
-- Phrase structure: sentences are built out of units that successively nest (organizes words into nested constitutents: words -> phrases -> bigger phrases -> sentences)
-- Determiners/articles: the, a
-- Noun: cat, dog
-- Context-free grammar rule: Noun phrase (NP) -> Determiner (Det) to Noun (N) or NP -> Det (Adj) N
-- Nested constituents: NP -> Det (Adj) N PP; PP -> Prep NP; reusing NP defined previously in a recursive way, making long sentences
-- Instead of having phrasal categories, directly represent sentence structure by saying how words depend on (modify or are arguments of) other words
-- "Look in the large crate in the kitchen by the door"
-    - "Look" is the root of the sentence
-    - "in the large crate" is dependent on "look"
-    - "the large" is a modifier of "crate", making it dependent on "crate"
-    - "in the kitchen" is a modifer of "crate", making it dependent on "crate"
-    - "in the" is dependent on "kitchen"
-    - "by the door" is a modifer of "crate" as well
-    - Identified how different parts of the sentence depend on each other
+- One of two views of linguistic structure: phrase structure (independent of context)
+    - Sentences are built out of units that successively nest
+    - They organize words into nested constitutents: words $\rightarrow$ series of words = phrases $\rightarrow$ series of phrases = one bigger phrase $\rightarrow$ series of bigger phrases = a sentence
+    - Determiners/articles: the, a
+    - Noun: cat, dog
+- Context-free grammar (CFG) rules: 
+    - Noun phrase (NP) $\rightarrow$ Determiner (Det) to Noun (N) or NP $\rightarrow$ Det (Adj) N
+    - Nested constituents: NP $\rightarrow$ Det (Adj) N PP; PP $\rightarrow$ Prep NP; reusing NP defined previously in a recursive way, making long sentences
+- Second view of linguistic structure: dependency structure
+    - Instead of having phrasal categories (NP, PP, etc.) that are independent of context, directly represent sentence structure by saying how words depend on (modify or are arguments of) other words
+    - "Look in the large crate in the kitchen by the door"
+        - "Look" is the root of the sentence
+        - "in the large crate" is dependent on "look"
+        - "the large" is a modifier of "crate", making it dependent on "crate"
+        - "in the kitchen" is a modifer of "crate", making it dependent on "crate"
+        - "in the" is dependent on "kitchen"
+        - "by the door" is a modifer of "crate" as well
+        - Fuguring out what words modify other words in the sentence
+        - Identifying how different parts of the sentence depend on each other
+- Why we care about sentence strucutre
+    - Necessary to interpret language correctly
+    - Humans communicate complex ideas by composing words together into bigger units
+    - We need to know what words are connected to what 
 - Prepositional phrase attachment can create ambiguities: a key parsing decision is how we attach various constituents
     - "Shuttle veteran and longtime NASA executive Fred Gregory appointed to board": is Fred Gregory both or are there two different people being appointed?
 - Dependency syntax postulates that syntactic structure consists of relations between lexical items, normally binary asymmetric relations ("arrows") called dependencies
@@ -439,3 +507,14 @@
     - ![](https://i.imgur.com/EXLsYii.png)
 
 ## Lecture 9
+
+## Lecture 10
+- Question answering
+    - With massive collections of full-text documents, i.e. the web, simply returning relevant documents is of limited use --> we want answers to our questions
+    - Requires two parts:
+        - Finding documents that might contain an answer - this can be handled by traditional information retrieval/web search
+        - Finding an answer **within** a paragraph or a document - often termed reading comprehension
+    - Machine comprehension: if the machine can provide a string which speakers would agree both answers that question and does not contain irrelevant information
+    - MCTest Corpus: Passage (P) + Question (Q) --> Answer (A), containing stories from which simple questions can be asked and answered
+    - 
+
