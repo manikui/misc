@@ -1,0 +1,943 @@
+# Stanford CS224N: NLP with Deep Learning
+
+## Lecture 1
+
+- We want to represent the meaning of a word
+  - Meaning: the idea that is represented by a word, signifier vs. signified
+- Usable meaning in a computer: use WordNet, a thesaurus containing lists of synonym sets and hypernyms ("is a" relationships): ```from ntlk.corpus import wordnet```
+  - Problems: great as a resource but missing nuance (proficient as a synonym for good), missing new meanings of words (slang), subjective, requires human labor, can't compute word similarity as it has fixed synonym sets
+- Traditional NLP (up to 2012): we regard words as just words, discrete symbols - a localist representation where words are represented as one-hot vectors (one 1, many 0s in the vector where 1 = the target word and dimension = size of vocabulary)
+  - Language has a lot of vocabulary: huge vector dimension
+    - We want to understand relationships in the meaning of words e.g. search for "Seattle motel" should match with "Seattle hotel" $\rightarrow$ traditional NLP would have these two vectors (one for "Seattle", another for "motel") as orthogonal $\Rightarrow$ no natural notion of similarity when you have one-hot vectors
+    - ![Word embedding](https://i.imgur.com/PNGjxen.png)
+      - Could rely on WordNet's list of synonyms but this could fail due to incompleteness or size
+    - Solution: learn to encode similarity in the vectors themselves
+- Representing words by their **context**: distributional semantics
+  - A word's meaning is given by the words that frequently appear close-by
+    - If you can explain what context is correct for a certain word, then you understand the meaning of the word
+    - When a word $w$ appears in a text, its context is the set of words that appear nearby within a fixed-size window
+    - Use the many contexts of $w$ to build up a representation of $w$
+    - All could be useful to understand the meaning of "banking": ![Banking context](https://i.imgur.com/VFnyQMw.png)
+- Word vectors: instead of having sparse one-hot vectors (a localist representation of a word), we will build dense vectors for each word (a distributed representation), chosen so that it is similar to vectors of words that appear in similar contexts - a distribution representation. It will be of a smaller dimension
+  - All elements in the vector will be non-zero: ![Word embedding vector example](https://i.imgur.com/pxQzcAT.png)
+  - Can then place words within a vector space wherein distance becomes a measure of similarity
+  - Dimension of vector space can be determined by a learning algorithm
+- Word2vec algorithm: a framework for leaning word vectors
+  - We have a large corpus of text. Every word in a fixed vocabulary is represented by a vector. Go through each position $t$ in the text, which has a center word $c$ and context ("outside") words around it $o$
+  - Use the similarity of the word vectors for $c$ and $o$ to calculate $P(o | c)$. Keep adjusting the word vectors to maximize this probability
+  - Eventually you'll get a word vectors space of some dimension determined by the algorithm with distance as a measure of similarity
+  - ![Word2vec visualization](https://i.imgur.com/JX5fjzX.png)
+    - Iterate through each of the words in the sentence
+    - Likelihood $L(\theta) = \Pi_{t = 1}^T \Pi_{-m \leq j \leq m; j \neq 0} P(w_{t + J} | w_t; \theta)$
+    - Objective function $J(\theta) = -\dfrac{1}{T} \sum_{t = 1}^T \sum_{-m \leq j \leq m; j \neq 0} \log P(w_{t+j}|w_t; \theta)$
+    - Calculate $P(w_{t+j}|w_t; \theta)$ using two vectors per word: $v_w$ when $w$ is the center word and $u_w$ when $w$ is a context word
+    - For a center word $c$ and a context word $o$: $P(o|c) = \dfrac{\exp(u_o^Tv_c)}{\sum_{w \in V} \exp(u_w^Tv_c)}$, an example of the softmax function that maps arbitrary values $x_i$ to a probability distribution $p_i$ $\Rightarrow$ picking out the words that are most likely to be similar within a distribution of words in the corpus
+    - $u_o^Tv_c$ is a measure of similarity between $o$ and $c$ where larger dot product means more similarity and thus larger probability
+    - $\sum_{w \in V} \exp(u_w^Tv_c)$ normalizes over entire vocabulary to give probability distribution
+    - Optimize using $\theta = \left [v_{\text{aardvark}}, ..., v_{\text{zebra}}, u_{\text{aardvark}}, ..., y_{\text{zebra}} \right ]$. Thus, $\theta \in \mathbb{R}^{2dV}$, containing 2 $d$-dimensional vectors each for $V$ words, which is passed into our likelihood function
+    - Slope in our multi-dimensional word vector space, what direction to move in to improve our model's predictive ability: $\dfrac{\partial}{\partial v_c} \log P(o | c) = u_o - \sum_{x = 1}^V P(x | c) u_x = u_o - E[x | c]$ = Difference between actual context word and expected
+    - Use gradient descent to update word vectors from their randomized initial states
+    - **End result of Word2vec:** a vector space with distance between word vectors indicating similarity, maximizing objective function places similar words nearby
+
+## Lecture 2
+
+- Word vector space also has a notion of vector composition, or analogy: "king" vector - "man" vector + "woman" vector = "queen" vector $\rightarrow$ king:man as is queen:woman; australia:beer as is france:champange
+- Word2vec aims to provide a reasonably high probability estimate to all words that occur in a given context
+- Word2vec maximizes objective function by putting similar words nearby in space
+- Need to use stochastic gradient descent as the objective is a function of all windows in the corpus, making it expensive to compute
+  - Take a minibatch of words from the corpus and compute the gradient on those
+  - End up with a sparse gradient vector as you are only selecting a few words from the entire corpus at each iteration
+    - Solution: either use sparse matrix updates to only update certain rows of full embedding matrices U and V, or keep around a hash for word vectors
+- Can also use word vectors derived from co-occurence counts: fill a co-occurence matrix $X$ using a window around each word type (word token - fruits instead of a specific fruit), counting up the number of times each word appears within that window, can skip over common words like "I, and, or, ..."
+  - ![Co-occurence matrix](https://i.imgur.com/ZmEXwya.png)
+  - $X$ is symmetric and sparse
+  - Can measure similarity directly using the vectors' dot product
+  - Problems: $X$ becomes huge with vocabulary increases, mostly sparse
+  - Solution: low rank approximation using SVD that preserves most of the information in the original matrix (retain only first k singular vectors where $\hat X \in \mathbb{R}^k$ is the best rank-k approximation of $X \in \mathbb{R}^n$)
+  - Hacks to improve performance: log transform counts, weight words closer together more, non-negaive Pearson correlation instead of counts
+  - Can end up resulting in useful word vectors that are somewhat similar to what you get from Word2Vec
+  - Conventional methods can yield useful vector spaces
+  - GloVe: ratios of co-occurence probabilities can encode meaning components
+    - ![Meanings of GloVe magnitudes](https://i.imgur.com/0BVKpSO.png)
+- Evaluating word vectors: intrinsic vs. extrinsic
+  - Intrinsic: are you guessing the right part of speech? Are you returning the correct synonyms? Evaluation on a specific/intermediate subtask, fast to compute, helps to understand that system
+  - Extrinsic: evaluation on a real task (some application that human beings use like web search or phone dialogue), can take a long time to compute accuracy, unclear if the subsystem is the problem or its interaction or other subsystems
+- Intrinsic word vector evaluation
+  - Word vector analogies: a:b :: c:?
+  - Word vector distances and their correlation with human judgements
+  - Evaluation word sense: the different contexts and meanings of a word: cluster word windows around words, retrain with each word assigned to multiple different clusters
+    - Different sense of a word reside in a linear superposition (weighted sum) in different word embeddings
+    - $v_{\text{pike}} = \alpha_1 v_{\text{pike}, 1} + \alpha_2 v_{\text{pike}, 2}$
+    - Where $\alpha_i = \dfrac{f_i}{\sum_{j}f_j}$ for frequency $f$
+
+## Lecture 3
+
+- Softmax Classifier: $P(y|x) = \dfrac{\exp(W_y x)}{\sum_c \exp(W_c x)}$
+  - Essentially 2 steps: Take the ith row of weight matrix $W$ and multiply that row with $x$ for all classes, then apply the softmax function with the normalization $\sum_c \exp(W_c x)$ to get a probability
+- For each training example $(x, y)$, our objective is to maximize the probability of the correct class $y$ or equivalently, minimize the negative log probability of the correct class
+  - Corresponds to: $\max P(y|x) = \max \log(P(y|x)) = \min - \log(P(y|x))$
+- Cross entropy loss: for true probability distribution $p$ and computed probability distribution $q$: $H(p, q) = - \sum_c P(c) \log(q(c))$
+  - The true probability distribution for some point takes the form: $p = [0, ..., 0, 1, 0, ..., 0]$. Thus, plugging this into the cross-entropy loss yields a single non-zero term: the negative log probability of the true class
+  - $H(p, q) = -\log P(y|x)$
+- When classifying over a whole dataset, take the average cross entropy loss
+- Why use Neural networks?
+  - Need to have classifiers that create non-linear decision boundaries
+  - Softmax classifiers create linear decision boundaries whereas neural nets are a family of classifiers that produce non-linear decision boundaries
+- Important distinctions from normal ML:
+  - Previous discussion about word vectors revealed that we can decide the real number entries within the vector to capture what we are interested in (meaning, analogy, etc.) $\rightarrow$ move the word vector around the vector space to a place that makes sense ("representation learning")
+  - Instead of just having to learn a weight matrix $W$, we also get to adjust the inputs (word vectors) $x$
+  - Learn both conventional (model, NN) parameters and word representations
+- Neural networks basics:
+  - Neuron takes in an n-dimensional input vector $x$, multiplies it by a weight vector associated with that specific neuron $w$, sums the scaled output, then adds a bias term $b$. Last, this weighted sum is passed through a non-linear activation function like sigmoid or ReLu to produce the output signal $a$: $a = \frac{1}{1 + \exp \left(-(w^Tx + b) \right)}$
+  - Extending this to $m$ different neurons, we have $m$ output activations: ![Output activations](https://i.imgur.com/xu4QbmD.png)
+  - To simplify, let $z_i = w^{(i)T}x + b^{(i)}$ for the ith neuron. Thus: ![ ](<https://i.imgur.com/QXdUDcf.png>)
+  - The vector of output activations $a$ can then be written as: ![ ](<https://i.imgur.com/Jo5pJ5L.png>) This will be passed onto the next layer
+  - The loss function directs what the intermediate hidden variables should be, so as to do a good job at predicting the targest for the next layer, etc.
+  - Neural networks require non-linear activation functions like sigmoid as with just linear functions, the networks can't model anything more than a linear transformation
+    - With more layers and non-linear functions, neural nets can approximate more complex functions
+    - As you add more layers with their own weights $W_1, W_2, ...$, the network will be able to approximate more complex functions and output increasingly non-linear decision boundaries. However, we can still represent these layers as a linear transformation on $x$: $W_1W_2x = W_x$
+- Named Entity Recognition (NER): finding and classifying names in text (organizations, places, people)
+  - Run a classifer that goes through the words one at a time (each word is a word in a context - like Word2Vec), assigning a type to each of them (organization, person, location, etc.)
+  - Then the problem becomes picking out the named entities within each of these subsequences, i.e. some named entities have multiple words
+    - Problems: boundaries of entity, hard to know if something is an entity ("Future School"), class of unknown/novel entity, entity class is ambiguous and depends on context (Charles Schwab as a person or company)
+- We want to build classifiers of language that work inside a context window of neighboring words
+  - Simple solution: average the word vectors in a window and then classify the average vector
+    - Problem: loses position information, you don't know which of those word vectors is the one you're meant to be classifying
+  - Another solution: train softmax classifier to classify a center word by taking the concatenation of word vectors surrounding it in a window, i.e. with window of 5 words, $x = x_{\text{window}} \in \mathbb{R}^{5d}$ and update the word vectors during gradient descent
+  - More complicated solution: binary classification with unnormalized scores
+    - Treat all windows without a named entity in its center as "corrupt"
+    - Want a system that returns a high score if there is a named entity at the center
+    - All the neural net does is return an unnormalized score for all combinations of concatenated word vectors
+    - The middle layer in the neural net learns non-linear interactions between the input word vectors, i.e. if the first word is like "museum" and the second word is a preposition like "in", then it's a good indication that the center word is a location like "Paris"
+    - Whole neural net: $x$ (input: concatenation of word vectors) $\rightarrow a = f(Wx + b) \rightarrow s = U^Ta$, the score of whether the center word is a named entity and $U$ is the weight matrix for that final layer
+    - Example gradient: $\dfrac{\partial s}{\partial b} = \dfrac{\partial s}{\partial a} \dfrac{\partial a}{\partial z} \dfrac{\partial z}{\partial b}= U^T \text{diag}(f'(z)) I = U^T \circ f'(z)$
+    - Similarly, $\dfrac{\partial s}{\partial W} = \dfrac{\partial s}{\partial a} \dfrac{\partial a}{\partial z} \dfrac{\partial z}{\partial W}$. The first two terms in the chain rule are the same
+    - We consider this repetition of gradients as the local error signal $\delta$, the computations in the neural net that are above where $W$ and $b$ are
+    - Just compute error signal once, reuse when computing lower-level partial derivatives
+    - $\delta = \dfrac{\partial s}{\partial a} \dfrac{\partial a}{\partial z} = U^T \circ f'(z)$
+    - Thus: $\dfrac{\partial s}{\partial W} = \dfrac{\partial s}{\partial a} \dfrac{\partial a}{\partial z} \dfrac{\partial z}{\partial W}= \delta \dfrac{\partial z}{\partial W} = \delta^T x^T$
+
+## Lecture 4
+
+- Derivative of a single weight $W_{ij}$: $W_{ij}$ only contributes to one output $z_i$
+- $\dfrac{\partial s}{\partial W_{ij}} = \delta_i x_j$, the error signal from above ($\delta_i$) multiplied with the local gradient signal
+- This gives the gradient for the full $W$ as $\delta^T x^T$
+- Now for updating the word vectors:
+  - The gradient that arrives at and updates the word vectors can simply be split up for each word vector
+  - $\nabla_x J = W^T\delta = \delta_{x_{\text{window}}} \in \mathbb{R}^{5d}$ where $\delta_{x_{\text{window}}, i}$ = $\nabla_{x_{i}}$ for word $i$ in window, the update to that word vector
+  - This should push word vectors around so that they will be more helpful in determining named entities
+  - Ex: the model can learn that seeing $x_{\text{in}}$ as the word just before the center is indicative of the center word being a location
+  - However, it doesn't always work, specifically when synonyms for the word are split between training/test sets
+    - While training the model, it will move around the synonym in the training set but the test set stay where they are, resulting in a divergence of meaning wrt the vector space
+    - If we had not updated the word vectors while training, assuming they had come from a word embedding sytem beforehand, then the classifier would do a better job
+  - What to do:
+    - Always use pre-trained word vectors as they are always trained on a huge amount of data - they are already robust to words in/out of your training data
+    - Update ("fine tune") your word vectors during training if you have a large dataset
+- Backpropagation: taking derivatives and using the chain rule while re-using derivatives computed for higher layers in the computation of derivatives for lower layers
+  - Forward propagation: expression evaluation of $z = Wx + b \rightarrow a = f(z) \rightarrow s = U^Ta$
+  - Backpropagation: pass gradients backwards along edges after forward pass (using chain rule)
+    - Node receives an upstream gradient from the node after it (in terms of the forward pass)
+    - This is the error signal from above, and it attempts to pass on the correct downstream gradient to the previous node using the local gradient signal and the error signal from above
+    - The local gradient signal is determined by the operation contained within the node, i.e. if the node is $h = f(z)$, the local gradient is $\dfrac{\partial h}{\partial z}$
+    - The downstream gradient then becomes the upstream gradient (the error signal from above) multipled by the local gradient: $\dfrac{\partial s}{\partial z} = \dfrac{\partial s}{\partial h} \dfrac{\partial h}{\partial z}$
+  - Backpropagation with multiple downstream gradients to a node: $z = Wx$ - you'll have multiple local gradients that you multiply with the upstream gradient and send them back to their respective inputs: $\dfrac{\partial s}{\partial W} = \dfrac{\partial s}{\partial z}\dfrac{\partial z}{\partial W}$ and $\dfrac{\partial s}{\partial x} = \dfrac{\partial s}{\partial z}\dfrac{\partial z}{\partial x}$
+  - Backpropagation with multiple upstream gradients returning to a node: sum the incoming gradients
+- Node intuitions:
+  - Summing the upstream gradients distribute them across the downstream gradients/branches
+  - Max routes upstream gradients to only one of the downstream gradients
+  - \* switches between downstream gradients
+- Do not calculate upstream gradients that were already completed, only use the upstream gradient(s) entering the current node, don't bother with further upstream gradients that you should already have calculated
+- General algorithm:
+  - Initialize all wieghts to small random values
+  - Forwards prop: visit nodes in topological sort order: compute value of current node given predecessors, resulting in a singular scalar output (run through operations from first layer to last, outputting loss at the end)
+  - Backwards prop (from loss, compute gradients according to operation within each node, going from last layer to first, passing gradients along as you propagate backwards):
+    - Initialize output gradients = 1
+    - Visit nodes in reverse order:
+      - Compute gradient wrt each node using upstream gradient from successors
+- Big O() complexity of fprop and bprop should be the same
+- NNs have a huge number of weights $\rightarrow$ regularization over all parameters is super important, especially for deep/powerful nets which tend to overfit
+  - Powerful NNs can memorize training data if left to train long enough, leading to massive overfitting
+- Different non-linear activation functions
+  - ![ ](https://i.imgur.com/iljPtW4.png)
+  - Sigmoid was default but no longer en vogue
+  - ![ ](https://i.imgur.com/rLsIp9T.png)
+  - Tanh has been foudn to covnerge faster than sigmoid in practice, outputs range from -1 to 1
+  - ![ ](https://i.imgur.com/KRLrOSO.png)
+  - Hard Tanh is computationally cheaper than Tanh but saturates for magnitudes of $z > 1$
+  - ![ ](https://i.imgur.com/apfTYyp.png)
+  - ![ ](https://i.imgur.com/aXuPPlg.png)
+  - ReLu does not saturate even for larger values of $z$
+  - ![ ](https://i.imgur.com/rU9z3Tb.png)
+  - Leaky/Parametric ReLu: ![ ](https://i.imgur.com/hy8uZJg.png)
+    - Traditional ReLu does not propagate any error for non-positive $z$, but Leaky/Parametric ReLu allows for a small proportion of the error to propagate backwards even whn $z$ is negative
+    - ![ ](https://i.imgur.com/G0K2YiJ.png)
+- Essential to initialize weights to small random values so as to avoid symmetries that hinder learning/specialization
+  - Can also use Xavier initialization: variance of random weight distribution inversely proportional to fan-in (previous layer size) and fan-out (next layer size): $\text{Var}(W_i) = \dfrac{2}{n_{\text{in}} + n_{\text{out}}}$
+    - Seeks to keep gradient within region where activation function will pass on gradient, i.e. not too big or small
+- Use an adaptive optimizer like Adagrad, RMSprop, Adam (a good place to start) that scale the learning rate and current iteration's gradient by the accumulated gradient
+- Learning rate must be correct to an order of magnitude
+  - Better results can be obtained by allowing learning rates to decrease per epoch
+
+## Lecture 5
+
+- One of two views of linguistic structure: phrase structure (independent of context)
+  - Sentences are built out of units that successively nest
+  - They organize words into nested constitutents: words $\rightarrow$ series of words = phrases $\rightarrow$ series of phrases = one bigger phrase $\rightarrow$ series of bigger phrases = a sentence
+  - Determiners/articles: the, a
+  - Noun: cat, dog
+- Context-free grammar (CFG) rules:
+  - Noun phrase (NP) $\rightarrow$ Determiner (Det) to Noun (N) or NP $\rightarrow$ Det (Adj) N
+  - Nested constituents: NP $\rightarrow$ Det (Adj) N PP; PP $\rightarrow$ Prep NP; reusing NP defined previously in a recursive way, making long sentences
+- Second view of linguistic structure: dependency structure
+  - Instead of having phrasal categories (NP, PP, etc.) that are independent of context, directly represent sentence structure by saying how words depend on (modify or are arguments of) other words
+  - "Look in the large crate in the kitchen by the door"
+    - "Look" is the root of the sentence
+    - "in the large crate" is dependent on "look"
+    - "the large" is a modifier of "crate", making it dependent on "crate"
+    - "in the kitchen" is a modifer of "crate", making it dependent on "crate"
+    - "in the" is dependent on "kitchen"
+    - "by the door" is a modifer of "crate" as well
+    - Fuguring out what words modify other words in the sentence
+    - Identifying how different parts of the sentence depend on each other
+- Why we care about sentence strucutre
+  - Necessary to interpret language correctly
+  - Humans communicate complex ideas by composing words together into bigger units
+  - We need to know what words are connected to what
+- Prepositional phrase attachment can create ambiguities: a key parsing decision is how we attach various constituents and identifying its dependencts
+  - "Shuttle veteran and longtime NASA executive Fred Gregory appointed to board": is Fred Gregory both or are there two different people being appointed?
+- Dependency syntax postulates that syntactic structure consists of relations between lexical items, normally binary asymmetric relations ("arrows") called dependencies
+  - ![ ](https://i.imgur.com/1nkKF4a.png)
+  - The arrows are commonly typed with the name of grammatic relations (subject prepositional object, apposition, etc.)
+  - The entity at the top of the arrow is the head, and it is connected to the dependent (modifier), i.e. head $\rightarrow$ dependent
+  - Usually, dependencies form a tree (connected, acyclic, single-head graph)
+- Sources of information for dependency parsing:
+  - Bilexical affinities
+  - Dependency distance: mostly with nearby words
+  - Intervening materials: dependencies rarely cross intervening verbs or punctuation
+  - Valency of heads: figuring out direction of dependency for a head ("was completed" implies only "was" is dependent on "completed", nothing else)
+- Dependency parsing:
+  - Each word is going to be dependent on another word or is the root (only one root)
+  - Don't want cycles, making dependencies a tree
+  - Can dependencies (arrows) cross: projective or non-projective?
+    - "Ill give a talk tomorrow on bootstrapping": talk -> give; "on bootstrapping" -> "talk". In this case, there are crossing dependencies so this is a projective sentence
+    - In projective sentences, constituents with corssing dependencies are delayed to the end of the sentence
+- One method: Transition-based parsing or deterministic dependency parsing
+  - Greedy choice of attachments guided by good machine learning classifiers
+  - Add words in sentence iteratively to stack. Execute a reduction if there is a pair of words with a dependency
+  - "I ate fish"
+    - Start: stack([root]); buffer([I, ate, fish])
+    - Shift: stack([root, I]); buffer([ate, fish])
+    - Shift as "I" is not the head of the sentence: stack([root, I, ate]); buffer([fish])
+    - Left-arc reduction: stack([root, ate]) and dependency: ate -> I
+    - Shift: stack([root, ate, fish]); buffer([])
+    - Right-arc reduction: stack([root, ate]) and dependency: ate -> fish
+    - Right-arc reduction: stack([root]) and dependency: root -> ate
+    - Finish condition achieved: when buffer is empty
+    - Final dependency: root -> ate; ate -> I; ate -> fish
+  - How to determine whether there is a dependency?
+- Improvement: Nivre's MaltParser:
+  - To decide whether to shift, left-arc or right-arc, use a discriminative classifier (softmax)  over each legal move
+  - Provides very fast linear time parsing with great performance
+  - Using a neural network can produce results of similar accuracy but is much faster than MaltParser
+- Distributed representations:
+  - We represent each word as a d-dimensional dense vector (word embedding) where similar words are expected to have close vectors
+  - Add part-of-speech tages (nouns, verbs) and dependency labels as their own d-dimensional vectors
+  - Plural nouns (NNS) should be close to singular nouns (NN); numerical modifiers (num) should be close to adjective modifiers (amod)
+- Use distributed representations of word vectors, part-of-speech tags, dependency labels as inputs into a simple neural net that outputs probabilities of what action to take at each word
+  - ![ ](https://i.imgur.com/JlPIiAo.png)
+  - ![ ](https://i.imgur.com/hVfFXkG.png)
+  - By using dense representations, achieved greater accuracy and speed
+
+## Lecture 6
+
+- Language modeling is the task of predicting what word comes next
+  - Given a sequence of words $x^{(1)}, ..., x^{(t)}$, compute the probability distribution of the next word $x^{(t + 1)}$: $P(x^{(t + 1)} | x^{(1)}, ..., x^{(t)})$ where $x^{(t + 1)}$ can be any word in the fixed, pre-defined vocabulary $V$
+  - A type of classification task
+  - A system that assigns a probability to a piece of text: $P(x^{(1)}, ..., x^{(T)}) = \Pi_{t = 1}^T P(x^{(t)} | x^{(t - 1)}, ..., x^{(1)})$
+  - Predicting the next word $\iff$ assigning probabilities to all possible words given previous words
+  - Example: autocorrect, search auto-completing
+- Pre-Deep Learning method of Language Modeling: n-gram language model
+  - An n-gram is a chunk of n-consecutive words: unigrams are single words, bigrams are 2-word phrases
+  - Idea: collect statistics about how frequent different n-grams are from training data, and use these to predict the next word
+- n-gram language models:
+  - Simplifying assumption: $x^{(t + 1)}$ depends only on the preceding $n - 1$ words
+  - Thus: $P(x^{(t+1)} | x^{(t)}, ..., x^{(1)}) = P(x^{(t+1)} | x^{(t)}, ..., x^{(t - n + 2)})$
+  - $P(x^{(t+1)} | x^{(t)}, ..., x^{(1)}) = \dfrac{P(x^{(t+1)}, x^{(t)}, ..., x^{(t - n + 2)})}{P(x^{(t)}, ..., x^{(t - n + 2)})}$, a ratio of the probabilities of a n-gram and a n-1 gram
+  - To get these probabilities, count them in some large corpus of text
+  - I.e. $P(x^{(t+1)} | x^{(t)}, ..., x^{(1)}) \approx \dfrac{\text{count}\left ( x^{(t + 1)}, x^{(t)}, ..., x^{(t - n + 2)} \right )}{\text{count}\left ( x^{(t)}, ..., x^{(t - n + 2)} \right ) }$
+- 4-gram language model:
+  - "As the proctor started the clock, the students opened their ____"
+  - Condition only on previous $n - 1 = 3$ words: "students opened their" to predict the next word, discard the rest
+  - $P(w | \text{students opened their}) = \dfrac{\text{count}(\text{students opened their w})}{\text{count}(\text{students opened their})}$
+  - ![ ](https://i.imgur.com/AVMFLtt.png)
+  - Was it good to discard the beginning part ("As the proctor started the clock")? It provided important context that would have aided our predictions (proctor) $\rightarrow$ throwing away too much context reduces predictive power $\rightarrow$ sparsity problem
+- N-gram language model problems
+  - Sparsity problem: if numerator is 0, i.e. if we've never seen the event occur in the training data, then our model assigns 0 probability to that event
+    - Fix - smoothing: add small $\delta$ to every word in vocabulary, smooths probability distribution where everythign has non-zero probability of being selected
+    - Increasing $n$ makes sparsity problem worse, typically $n$ cannot be bigger than 5
+    - Another sign of sparsity: not much granularity in the probability distribution, i.e. when words have very similar probabilities
+  - Context problem: If denominator is 0, i.e. we've never seen the preceeding $n-1$ words before, probability is undefined as the part we are conditioning on does not exist in our training data
+    - Fix - back off: condition on less words and shift to a smaller n-gram model like $n-2$
+  - Storage: need to store count for all n-grams observed in the corpus (a larger model as $n$ increases)
+- Using n-gram language models to generate text
+  - Say you start with $n$ words, condition on the previous $n - 1$ words to determine the nth word
+  - Sample one word from the probability distribution generated by the model, not necessarily selecting the word with the highest probability
+  - Then move on, conditioning on the last $n - 1$ words to determine the next word, etc.
+  - Result: grammatical but incoherent - we need to consider more than 3 words at a time but doing so risks introducing sparsity
+  - Can include punctuation as another type of word or token to include in model
+- Neural Language Models
+  - Fixed-window neural Language model:
+    - Discard all words except for what we are conditioning on (the fixed window)
+    - ![ ](https://i.imgur.com/8b7vSR7.png)
+    - Represent words as one-hot vectors
+    - Look up the word embeddings
+    - Pass word embeddings into a hidden layer + bias with a non-linear activation function
+    - Pass into output distribution using softmax
+    - This returns a probability distribution of all the possible words, select the word with highest density
+    - Improvements over n-grams: no sparsity problem, don't need to store all observerd n-grams just the word vectors
+    - Problems: fixed window is probably still too small, enlarging window enlarges weight matrix $W$, window can never be large enough
+    - Subtle problem: each word $x^{(i)}$ is multiplied by completely different weights in $W$, i.e. $x^{(i)}$ is multiplied by weights in column $i$ which are different from others columns. There is no symmetry in how the inputs are processed, which is not helpful as common word expressions are not being learned (which would be the case if weights were shared across columns)
+    - Most of the problems come from simplifying assumption of looking only at a fixed window $\rightarrow$ we need a neural architecture that can process any input length instead of just using a fixed window
+- Recurrent Neural Networks (RNN)
+  - ![ ](https://i.imgur.com/KG0lFho.png)
+  - Input sequence of any length
+  - Sequence of hidden states, one for each input
+  - Each hidden state $h^{(t)}$ is computed using the previous hidden state $h^{(t - 1)}$ and the input at that step $x^{(t)}$
+  - Think of the hidden state as a single state that is mutating over time (time steps) $\rightarrow$ apply the same weight matrix $W$ at every step repeatedly
+- RNN Language Model
+  - ![ ](https://i.imgur.com/PoESVbU.png)
+  - From one-hot word vectors $x^{(i)}$, find the corresponding word embedding vector $e^{(i)} = Ex^{(i)}$. Pass into hidden state $h^{(i)} = \sigma \left ( W_h h^{(i - 1)} + W_e e^{(i)} + b_1 \right )$. At the last hidden state, output probability distribution $y^{(t)} = \text{softmax} \left ( Uh^{(t)} + b_2 \right )$
+  - Advantages
+    - Can processs any length of input
+    - Computation for step $t$ can use information from many steps back
+    - Model size doesn't increase for longer input ($W_h, W_e$ remain the same size)
+    - Same weights applied on every timestep so there's symmetry in how the inputs are processed (if it learns a good way to process an input at an early timestep, this benefits the model going forward)
+  - Disadvantages
+    - Recurrent computation is slow as you cannot do them in parallel, must be in sequence
+    - Difficult to access information from many steps back
+- Training a RNN-LM
+  - Get a big corpus of text
+  - Feed into RNN-LM, compute output distribution $\hat y^{(t)}$ for every step t $\rightarrow$ predict probability distribution of every word, given words so far
+  - Loss function on step $t$ is the cross-entropy between predicted probability distribution $\hat y^{(t)}$ and the true next word $y^{(t)}$ (the one-hot vector of $x^{(t + 1)}$
+  - Average cross-entropy loss over every step $t$ in corpus gives overall loss for entire training set
+  - ![ ](https://i.imgur.com/8TQqQVv.png)
+  - Computing loss and gradients across entire corpus is too expensive, so consider the sequence of words to just be a sentence or a document
+  - Also use SGD on a batch of sentences, compute gradient on that batch, update weights, repeat
+- Backpropogation for RNNs
+  - What is the derivative of the loss at time $t$ wrt the repeated weight matrix $W_h$?
+    - The gradient wrt a repeated weight is the sum of the gradient wrt each time it appears: ![ ](https://i.imgur.com/xQJwmyz.png)
+    - Caulculate the gradient wrt each time it appears from back to front ($i = t, ..., 0$), summing gradients as you go $\rightarrow$ backpropagation through time
+- Generating text with a RNN-LM:
+  - ![ ](https://i.imgur.com/t4Kvl2k.png)
+  - Generate text by repeated sampling from distribution not necessarily selecting the word with highest probability, sampled output is next step's input
+- Evaluating LMs
+  - Standard evaluation metric - perplexity: ![ ](https://i.imgur.com/IVrcGAe.png)
+  - For every word in the corpus, compute the product of the inverse of the probability of the next word appearing
+  - Perplexity gets larger and larger as corpus gets larger
+  - ![ ](https://i.imgur.com/JCrLzYP.png)
+  - The lower the perplexity the better - want LM to assign high proability to the corpus
+- Why do we care about language modeling?
+  - It's a benchmark task that helps us measure our progress on understanding language (predicting next word is a general and difficult problem)
+  - Subcomponent of many NLP texts, especially those involving generating text or estimating the probability of text: predictive typing, speech recognition, handwriting recognition, spelling/grammar correction
+
+## Lecture 7
+
+- Vanishing gradient:
+  - When you want to compute the gradient of the loss at some time step $t$ wrt a hidden layer at an earlier time step $t - 4$, and the intermediate gradients at $t-1$, $t-2$ and $t-3$ are small, then the gradient signal gets smaller and smaller (accumulated gradient is a product of small gradients) as it backpropagates further in time
+  - ![ ](https://i.imgur.com/sATZdi5.png)
+  - The magnitude of the gradient signal from close-by is larger than that from farther away $\rightarrow$ hidden layer weights that are close-by have a larger say in loss calculation than farther away ones
+    - Model weights are updated only wrt near effects, and less so based on long-term effects
+    - Unable to learn a connection between two words that are placed far away
+  - We care about $\dfrac{\partial J}{\partial h}$ because the model weights $W$ are a function of the hidden layers $h$
+- Effect of vanishing gradient on RNN-LMs:
+  - Gradient can be viewed as a measure of the effect of the past on the future
+  - If the gradient becomes vanishingly small over longer distances, then we can't tell whether:
+    - There's no dependency between step $t$ and $t + n$ in the data (the provided task), there's no connection to be learnt
+    - We have wrong parameters to capture the true dependency between $t$ and $t+n$, there is a connection but we are unable to learn it
+  - Example: reference to tickets early in a sentence that is key to predicting the next word far later in the sequence
+    - The RNN-LM needs to model the dependency between "tickets" on the 7th step and the target word "tickets" far at the end
+    - If the gradient is small, the model can't learn this dependency $\rightarrow$ it's unable to predict similar long-distance dependencies at test time
+  - Example: "The writer of the books __(is/are)__"
+    - Correct answer: is
+    - Brings up syntactic vs. sequential recency
+    - We care about syntactic recency, not sequential as the target word is singular due to the subject being singular. Sequential recency will focus on the plural "books" and select "are" - words that are closer together
+    - RNN-LM are good at sequential recency due to vanishing gradients, there are weak signals from earlier words that are more important to syntactic recency
+- Exploding gradients:
+  - If the gradient becomes too big, then the SGD update step becomes too big, drastically changing the model parameters
+  - This can cause bad updates: we take too large a step and reach a bad parameter configuration with large loss
+  - Worst case: results in Inf or NaN in the network, forcing you to restart training from an earlier checkpoint
+- Solution: gradient clipping
+  - If the norm of the gradient is greater than some threshold, scale it down before applying SGD update
+  - if $||g|| >$ threshold: $g \leftarrow \dfrac{threshold}{||g||} g$
+  - Take a truncated step in the same direction
+- Solution to vanishing gradient:
+  - Main problem of vanishing gradients: it's too difficult for the RNN to learn to preserve information over many timesteps
+  - In a vanilla RNN, the hidden state is constantly being rewritten: $h^{(t)} = \sigma \left ( W_h h^{(t - 1)} + W_x x^{(t)} + b \right )$
+  - Non-linearity makes it hard to preserve information from previous steps
+  - Can we create a RNN with separate memory, a separate place to store information we'll need later? $\rightarrow$ LSTM
+- Long Short-Term Memory (LSTM)
+  - A type of RNN that aims to solve the vanishing gradients problem
+  - Architecture:
+    - On step $t$, there is a hidd\en state $h^{(t)}$ and cell state $c^{(t)}$
+      - Both are vectors of length $n$
+      - The cell stores long-term information, the memory unit
+      - The LSTM can erase, write and read information from the cell
+    - Selection of which information is erased/written/read is controlled by three corresponding gates
+      - Also vectors of length $n$
+      - On each timestep, each element of the gates can be open (1), closed (0), or somewhere in-between
+      - If gate is open, information is passed through
+      - Gates are dynamic, their value is computed based on the current context
+- How LSTM works
+  - Forget gate: controls what is kept vs. forgotten from previous cell state: $f^{(t)} = \sigma \left (W_f h^{(t - 1)} + U_f x^{(t)} + b_f \right) \in [0, 1]$
+  - Input gate: controls what parts of the new cell content are written to cell: $i^{(t)} = \sigma \left (W_i h^{(t - 1)} + U_i x^{(t)} + b_i \right) \in [0, 1]$
+  - Output gate: controls what parts of cell are output to hidden state: $o^{(t)} = \sigma \left (W_o h^{(t - 1)} + U_o x^{(t)} + b_o \right) \in [0, 1]$
+  - New cell content: the new content to be written to the cell: $\tilde c^{(t)} = \tanh \left (W_c h^{(t - 1)} + U_c x^{(t)} + b_c \right)$
+  - Update new cell content using gates: forget some content from last cell state $c^{(t - 1)}$ and write some new cell content \tilde c^{(t)}: $c^{(t)} = f^{(t)} \circ c^{(t - 1)} + i^{(t)} \circ \tilde c^{(t)}$
+    - $f^{(t)}$ and $c^{(t)}$ are multiplying element-wise with previous and new cell content respectively, which effectively masks out some of the old/new information depending on how open the gates are
+  - Pass cell content through $\tanh$ to get hidden state: $h^{(t)} = o^{(t)} \circ \tanh \left ( c^{(t)} \right )$
+    - Adds another non-linearity
+    - Treat hidden states like the outputs of the LSTM which are returned or passed onto further states while the cell states are the unedited internal memory
+  - Note: $\circ$ is element-wise product
+  - If the forget gate is set to remember everything on every timestep (i.e. 1), then the info in the cell is preserved indefinitely
+  - LSTM doesn't guarantee there is no vanishing/exploding gradient, but it provides an easier way for the model to learn long-distance dependencies (by adjusting magnitudes of gates)
+  - Can also look at $c^{(t - 1)}$ itself
+  - A lot of extra information to keep track of, but has done well on speech and handwriting recognition tasks
+- Gated Recurrent Units (GRU)
+  - Simpler alternative to LSTM but allows for long-term signals to persist
+  - Architecture:
+    - On each timestep $t$ we have input and a hidden state, no cell state
+    - Update gate: controls what parts of the previous hidden state are updated vs. preserved: $u^{(t)} = \sigma \left (W_u h^{(t - 1)} + U_u x^{(t)} + b_u \right) \in [0, 1]$
+    - Reset gate: controls what parts of the previous hidden state are used to compute new content: $r^{(t)} = \sigma \left (W_r h^{(t - 1)} + U_r x^{(t)} + b_r \right) \in [0, 1]$
+    - New hidden state content at timestep: reset gate selects useful parts of previous hidden state. Uses this and current input to compute new hidden state content $\tilde h^{(t)}$: $\tilde h^{(t)} = \tanh \left (W_h\left(r^{(t)} \circ h^{(t - 1)} \right )  + U_h x^{(t)} + b_h \right)$
+    - New hidden state: update gate simultaneouly controls what is kept from previous hidden state and what is updated to new hidden state content: $h^{(t)} = \left ( 1 - u^{(t)} \right ) \circ h^{(t - 1)} + u^{(t)} \circ \tilde h^{(t)}$, $u^{(t)}$ sets the balance between preserving things from previous hidden state (0) vs. writing new things (1)
+  - GRUs make it easier to retain information long-term, by setting the update gate ~ 0 and keeping the hidden state the same at every step
+- LSTM vs. GRU:
+  - GRU is quicker to compute and has fewer parameters
+  - No conclusive evidence that one consistently outperforms the other
+  - LSTM is a good default choice, especially if your data has particularly long dependencies, or if you have lots of training data as this will help flesh out the parameters
+  - Rule of thumb: start with LSTM, switch to GRU for more efficiency
+- Vanishing/exploding gradients are also prominent in feed-forward NNs and CNNs
+  - Due to chain rule/choice of nonlinearity, gradient can become vanishingly small as it backpropagates
+  - Thus, early layers are learnt very slowly, making the NN hard to train
+  - Solution: lots of new deep feedforward/CNN architehcures that add more direct connections, thereby alowing the gradient to flow and making training faster
+- Residual connections (ResNet)
+  - ![ ](https://i.imgur.com/DAFA4HO.png)
+  - Employs skip connections that bypass layers, preserving information by default, feeding the "identity connection" directly into a later layer (kind of like an extra bias term but using input from a previous layer)
+  - Skip layer is called an identity connection because it directly preserves information from prior to transformation
+  - Makes deep networks much easier to train
+- Dense connections (DenseNet)
+  - Directly connects everything to everything
+- Highway connections (HighwayNet)
+  - Similar to residual connections, but how much of the identity connections factors into the transformation layer is controlled by a dynamic gate
+  - Inspired by LSTMs, but applied to deep feed-forward/CNNs
+- Though vanishing/exploding gradients are a general problem, RNNs are particularly unstable due to the repeated multiplication by the same weight matrix
+- Bidirectional RNNs
+  - ![ ](https://i.imgur.com/zu02hrX.png)
+    - There is useful information to the left and right that we would like the network to encode
+  - ![ ](https://i.imgur.com/VxdXgEQ.png)
+    - 2 RNNs happening at the same time with their own separate weight matrices but using the same input sequence
+    - At each step, take the hidden states from each of the RNNs and concatenate them together
+  - ![ ](https://i.imgur.com/d8YHNca.png)
+  - Bidirectional RNNs are only application if you have access to the entire input sequence (you should use them by default)
+  - They are not applicable to Language Modeling, because you only have the left context available
+  - BERT is a bi-directional transformer
+- Multi-layer RNNs (Stacked RNNs)
+  - RNNs are already deep in one dimension (along time)
+  - We can also make them "deep" by applying multiple RNNs at rach timestep, allowing the network to compute more complex representations
+  - Lower RNNs should compute lower-level features and the higher RNNs should compute higher-level features
+  - ![ ](https://i.imgur.com/vWhBkwf.png)
+- Paractical takeaways:
+  - LSTMs are powerful but GRUs are faster
+  - Clip your gradients
+  - Use bidrectionality when possible (full input sequence available)
+  - Multi-layer RNNs are powerful, but you might need skip/dense connections if it's deep
+
+## Lecture 8
+
+- Machine Translation (MT): translating a sentence x from one language (the source language) to a sentence y in another language (the target language)
+- Early MT: rule-based, using a bilingual dictionary to map Russian words to their English counterparts
+- Statistical MT: learn a probabilistic model from data
+  - We want to find the best English sentence y, given French sentence x: $\arg \max_y P(y|x)$
+  - Use Bayes' rule to break this down into two components to be learn separately: $\arg \max_y P(x|y) P(y)$
+    - $P(x|y)$: translation model - models how words and phrases should be translated (fidelity), learnt from parallel data
+    - $P(y)$: language model - models how to write good English (fluency), learnt from monolingual data
+    - A division of labor: instead of one conditional probability distribution that does everything at once, separate it so the translation model can take care of local translation of small chunks of words while the language model aims to write good phrases in the target language
+  - To learn translation model:
+    - Need large amount of parallel data like pairs of human-translated French/English sentences (parallel corpus like Rosetta Stone)
+    - Consider $P(x, a|y)$ where $a$ is the alignment, i.e. the word-level correspondence between particular words in the translated sentence pair of French sentence $x$ and English sentence $y$
+      - Alignment can be many-to-one, one-to-many (fertile - many children in the target sentence), many-to-many (phrases that correspond to phrases i nthe target language)
+      - Some words have no counterpart
+    - We learn $P(x, a|y)$ as a combination of many factors:
+      - Probability of particular words aligning (also depends on position in sentence)
+      - Probability of a particular word having fertility (number of corresponding words)
+      - All learnt from parallel data
+  - How to compute $\arg \max_y$:
+    - We could enumerate every possible $y$ and calculate the probability $\rightarrow$ too expensive
+    - Solution - decoding: use a heuristic search algorithm to search for the best translation, discarding hypotheses that are too low-probability
+  - Huge research field, but the best SMTs were extremely complex with many separately-designed subcomponents that required feature engineering and extra resources
+- Neural Machine Translation (NMT)
+  - A way to do Machine Translation with a single neural network
+  - Used NN architecture called sequence-to-sequence (seq2seq), which involves two RNNs (Encoder and Decoder RNN)
+  - Encoder RNN provides an encoding of the source sentence
+  - Decoder RNN is a LM that generates a target sentence, condition on the passed-in encoding (creates a probability distribution of the next possible words)
+  - An example of usage at test time: ![ ](https://i.imgur.com/s6xIzz6.png)
+    - Feed source sentence word embeddings into Encoder RNN, its final encoding provides initial hidden state for Decoder RNN
+    - Feed in \<START\> token into decoder RNN, select word with highest probability from outputted distribution, then feed that word into the next step of decoder RNN
+    - When decoder RNN issues \<END\> token, target sentence has been outputted
+    - You can use seq2seq for summarization (long text $\rightarrow$ short text), dialogue, parsing, code generation
+  - Seq2seq is an example of a conditional LM
+    - LM because the decoder is predicting the next word of the target sentence
+    - Conditional because its predictions are also conditioned on the source sentence's encoding
+  - NMT directly calculates probability of next word of target sentence $y$ given source sentence $x$: $P(y|x) = P(y_1|x)P(y_2|y_1, x)...P(y_T|y_1, ..., y_{T - 1}, x)$
+  - Recall with SMT, we broke up this conditional probability into a translation and language models. Here, we compute it directly
+  - Training:
+    - ![ ](https://i.imgur.com/sQB8tyS.png)
+    - Feed source sentence into encoder RNN
+    - Then feed target sentence into decoder RNN using final hidden state of encoder RNN as initial hidden state of decoder
+    - Feed \<START\> token into decoder RNN
+    - After, feed each word from target sentence into decoder RNN. This is different from testing which feeds in the previous word/token
+    - For every step of decoder RNN, produce a probability distribution and compute loss compared to turue probability distribution
+    - Average all of the losses to get total loss for the target sentence
+    - No \<END\> token is issued as during training, the decoder RNN is fed in words directly from the target sentence, not using its previous step's prediction
+    - Backpropogation is end-to-end which means it is trained using that single loss on the target sentence
+  - Greedy decoding: take most probable word on each step of decoding RNN, the process used in test
+    - Problem: taking the $\arg \max$ of a specific word is not the same as the $\arg \max$ over the whole sentence - no way to undo decisions if you mis-predict a word midway
+    - Naive solution: exhaustive search decoding - has $O(V^T)$ complexity
+    - Solution: beam search decoding
+      - On each step of decoder, keep track of the k most probable partial translations (hypotheses) where k is the beam size (typically 5-10)
+      - A hypothesis $_1, ..., y_t$ has a score which is its log probability: $\text{score}(y_1, ..., y_t) = \sum_{i = 1}^T \log P_{LM}(y_i | y_1, ... y_{i - 1}, x)$
+      - Scores are all negative so higher score is better
+      - Not guaranteed to find correct solution but is more optimized than exhaustive search
+      - We search for high-scoring hypotheses, keeping track of top $k$ on each step
+      - Once you have reached the stopping condition, backtrack from last word selected along all words until you reach the start token, using the following score: $\sum_{i = 1}^T \log P_{LM}(y_i | y_1, ... y_{i - 1}, x)$
+      - ![ ](https://i.imgur.com/56nB3vM.png)
+      - Take 2 most likely words as outputted from seq2seq model
+      - For each of those, find the top 2 words that come next, adding score of next word to previous score
+      - Of the $k^2 = 4$ possibilities, select $k = 2$ to move on. Repeat, finding those words' top 2 that come next, ...
+      - At stopping condition, backtrack along tree and return translation
+      - Stopping condition problem: different hypotheses may produce end tokens on different timesteps
+      - When a hypothesis produces an end token, that hypothesis is complete. Place it aside and continue exploring other hypotheses
+      - Usually, we continue beam search until we reach timestep $T$ or we have at least $n$ completed hypotheses, both of which are pre-defined cutoffs
+      - Among completed hypotheses, select hypothesis with smallest normalized log probability sum: $\dfrac{1}{t} \sum_{i = 1}^T \log P_{LM}(y_i | y_1, ... y_{i - 1}, x)$
+      - Note: we don't use normalized score during training because at each step, we're comparing scores of different hypothesis with the same length
+- Advantages of NMT
+  - Better performance, more fluent, better use of context
+  - It's a single NN that can be optimized end-to-end, without needing to individuallty optimize subcomponents
+  - Same method words for all language pairs, as long as you find a good parallel corpus
+- Disadvantages of NMT
+  - NMTs are less interpretable: hard to debug
+  - Difficult to control: can't specify rules or guidelines to translation (e.g. always translate this word in a specific way)
+- Evaluating MTs
+  - Bilingual Evaluation Understudy (BLEU): compares the machine-written translation to one or more human-written translations, and computes a similarity score based on:
+    - n-gram precision by looking at all of the 1,2,3 and 4-grams that appear in each of the translations, and comparing how many of the n-grams that appeared in the machine translation were also present in the human translation
+    - Additional brevity penalty for system translations that are too short compared to human translations
+  - BLEU is useful but imperfect
+    - There are many valid ways to translate a sentence
+    - A good translation can get a poor BLEU score because it has low n-gram overlap with the human translation
+- Continuing MT issues
+  - Out-of-vocabulary words
+  - Domain mismatch between training and test data
+  - Maintaining context over longer text (articles, books, across paragraphs)
+  - Low-resource or small corpus language pairs (sometimes reliant on bible translations)
+  - Common sense is still hard
+  - NMT picks up biases in training data
+  - Uninterpretable systems do strange things
+- Seq2seq: bottleneck problem
+  - The last hidden layer vector in the encoder RNN needs to capture all of the information about the source sentence, as it is going to be passed into the decoder RNN
+  - The last sentence forms an information bottleneck - too much pressure on that single vector to represent the whole source sentence
+- Solution to the bottleneck problem: Attention
+  - On each step of the decoder, use direct connection to the encoder to focus on a particular part of the source sentence
+  - For each decoder step, create an attention score by taking the dot product with each step in the encoder RNN
+  - Then, take softmax to turn all of the scores into a probability distribution
+  - Create an attention output vector that is a  sum of the encoder hidden state vectors using the calculated probability distribution as weights
+  - This attention output vector will determine where the encoder RNN will focus for its current step
+  - ![ ](https://i.imgur.com/ITswLgW.png)
+  - Concatenate attention output with decoder hidden state, then compute probability distribution to sample next word in the decoder RNN
+  - ![ ](https://i.imgur.com/x5pPiBK.png)
+- Attention significantly improves NMT performance
+  - Very useful to allow decoder to focus on certain parts of the source
+  - Solves the bottleneck problem by allowing decoder RNN to look at every step in the encoder RNN
+  - Helps with vanishing gradient problem
+  - Provides interpretability by inspecting attention distribution to see what the decoder was focusing on
+  - Get alignment for free: no need to define the notion of alignment as the network just learns it by itself
+- Attention is a general Deep Learning technique
+  - More general definition of attention: given a set of vector values and a vector query, attention is a technique to compute a weighted sum of the values, dependent on the query
+  - The query is attending to the values - the model determines how the query should pay attention to the values
+  - In seq2seq, each decoder hidden state (query) attends to all of the encoder hidden states at the same time (values)
+  - The weighted sum is a selective summary of the information contained in the values. The probability distribution on the values (attention distribution), allows the query to determine which values to focus on
+  - A way to obtain a fixed-size representation of an arbitrary set of representations
+  - ![ ](https://i.imgur.com/cVYbu1g.png)
+  - ![ ](https://i.imgur.com/EXLsYii.png)
+
+## Lecture 9
+
+- Backpropagation through time
+  - When gradient goes to 0, we cannot tell whether:
+    - There is no dependency between timestep $t$ and $t+n$ in data
+    - Wrong configuration of parameters
+  - Attention as a way to create shortcut connections, leading to direct backpropagation signal and alleviating problem of vanishing gradients
+  - How about a way to adapt what connections are activated, i.e. the network learns what shortcuts are useful
+    - Add a reset gate that keeps some parts of what was stored previously and throw away other parts: $r_t - \sigma \left (W_r x^{(t)} + U_r h^{(t - 1)} + b_r \right )$
+- Key difference between LSTM and GRU: LSTM gates all operations (forget, input, output) so the machine can learn what stuff can be forgotten/ignored rather than it all being crammed on top of everything else
+  - GRU has a mixture taking $u^{(t)}$ of current hidden state and $1 - u^{(t)}$ of previous hidden state while LSTM uses two different values, a forget gate $f^{(t)}$ to control how much of previous state filters through and input gate $i^{(t)}$ to filter current state
+  - In theory, having two separate gates is more powerful/flexible than a mixture
+- The secret of LSTMs and GRUs (and ResNets) is rather than simply multiplying, it adds non-linear stuff with $c^{(t - 1)}$. There is a direct, linear connection between current state and previous hidden state
+- Bulk of computation for NMT is in softmax, so ideal would be to limit size of vocabulary (modest ~ 50K)
+- With a limited vocabulary, how to deal with \<unk\>s? These are unknown words unseen in the vocabulary
+  - Hierarchical softmax: a tree-structured vocabulary with multiple small softmaxes
+  - Noise-contrastive estimation: binary classification
+  - Train on a subset of the vocabulary at a time; test on a smart subset of possible translations
+  - Use attention to work out what you are translating, then do a dictionary lookup
+- Evaluating MT
+  - Manual is still the best, specifically using a comparative ranking of translations
+  - Use MT as one sub-component of a whole application and use that evaluation as a proxy of MT's evaluation (question answering score goes up $\rightarrow$ MT quality is better)
+    - Problem: may not test many aspects of the translation
+  - Automatic metrics like BLEU, creating quick way to develop, iterate and test many MT systems
+- BLEU Evaluation Metric
+  - Use a human translation as reference, then compare with MT through n-gram precision scores with a brevity penalty
+  - BLEU uses a weighted geometric mean on 1 to 4-gram precision scores: $\exp \left (0.5 \log p_1 + 0.25 \log p_2 + 0.125 \log p_3 + 0.125 \log p_4 - \max \left (\dfrac{\text{words-in-reference}}{\text{words-in-machine}} - 1, 0 \right ) \right)$
+- Initial results showed that BLEU predics human judgements of MT quality well
+- However, people started optimizing their systems to maximize BLEU scores, resulting in higher scores but correlation with human judgements of quality went down
+- Training a gated RNN
+  - Use an LSTM or GRU
+  - Initialize recurrent matrices to be orthogonal
+  - Initialize other matrices with a sensible (small) scale
+  - Initialize forget gate bias to 1 $\iff$ remembering
+  - Use adaptive learning rate algorithms like Adam, AdaDelta
+  - Clip the norm of the gradient
+  - Either only dropout vertically or look into using Bayesian Dropout
+- Experimental strategy:
+  - Work incrementally: start with a very simple model and progressively add bells and whistles one-by-one
+  - Initially run on a tiny amount of (synthetic) data, something like 8 examples is good
+  - Make sure your model can get 100% on it, otherwise the structure itself is faulty or inadequately powerful
+  - When running on a large dataset, model should still score close to 100% on the training data after optimization
+    - **Overfitting to training data is not something to be scared of when doing deep learning**
+    - **These models are usually good at generalizing because of the way distributed representations share statistical strength regardless of overfitting to training data**
+  - However, you still want good generalization performance, which can be achieved through regularizing your model until it doesn't overfil on dev/validation data
+    - Generous dropout is the secret to success
+
+## Lecture 10
+
+- Question answering
+  - With massive collections of full-text documents, i.e. the web, simply returning relevant documents is of limited use $\rightarrow$ we want answers to our questions
+  - Requires two parts:
+    - Finding documents that might contain an answer - this can be handled by traditional information retrieval/web search
+    - Finding an answer **within** a paragraph or a document - often termed reading comprehension
+  - Machine comprehension (Burges 2013): if the machine can provide a string which speakers would agree both answers that question and does not contain irrelevant information
+  - MCTest Corpus: Passage (P) + Question (Q) $\rightarrow$ Answer (A), containing stories from which simple questions can be asked and answered
+  - "Factoid" questions: Questions whose answer is some simple named entity
+  - Span = subsequence
+  - Extractive question answering: Questions whose answer is a span from a given passage
+  - Simple QA Model: Stanford Attentive Reader
+    - From a given question, look up word embeddings for each of the words in that question. Run a bi-directional LSTM on the question
+    - Take the final hidden states of each LSTM and concatenate them to form the question's hidden state representation $q \in \mathbb{R}^{2d}$ for $d$-dimensional word embeddings
+    - For the passage, look up word embeddings for each word and run a bi-directional LSTM
+    - Use the question representaion $q$ to work out where the answer is using attention
+    - Work out an attention score between each word's bi-directional LSTM representation (2 hidden states concatenated with each other) $\tilde p_i$ and $q$: $\alpha_i = \text{softmax}_i \left ( q^T W_s \tilde p_i \right )$, giving probabilities over the different words in the passage
+    - Answer starts where this softmax distribution is maximized
+    - Compute another attention distribution $\alpha_i' = \text{softmax}_i \left ( q^T W_s' \tilde p_i \right )$ to predict end token using a different weight matrix
+    - Start $\rightarrow$ end is the predicted answer
+    - No need to look at middle because the neural network should learn to push attention from interior words towards beginning and end of question
+    - While $\alpha_i$ and $\alpha_i'$ have the same equation, the neural network will optimize one weight matrix to find starts of question and the other to find ends of questions
+- What do these neural models do?
+  - Neural Networks do better semantic matching of word similarities or rephrasings that are semantically related but don't use the same words, i.e. if question is: "where was x born?" and the sentence says "x was born in ..."
+  - NNs were able to match questions with answers even if words were more loosely related
+- BiDAF: Bi-Directional Attention Flow for Machine Comprehension
+  - Uses word embeddings, bi-LSTM done for both the passage and questions
+  - Adds character-level embeddings
+  - Main innovation: attention flow layer
+    - The Stanford Attention Reader used attention to map from a representation of the question onto the words of the passage
+    - New idea: attention should flow both ways - from the context (passage) to the question and vice versa
+    - For each passage word and question word, work out a similarity score:
+      - Build a big concatenated vector of the LSTM representations of passage word, question word and element-wise product of passage and question words
+      - Calculate that vector's dot product with learned weight matrix: ![ ](https://i.imgur.com/Lf0nPO9.png)
+      - Similarity matrix $S$ encodes attention of each word going in both directions
+      - For Context-to-Question (C2Q) attention, i.e. which query words are most relevent to each context word: ![ ](https://i.imgur.com/FdkPVOz.png)
+        - Calculate highest softmax probability for each word in question, then find attention vectors by calculating attention-weighted average of question words representations
+        - You end up with attention-weighted view of the question mapped onto each position in the passage
+    - For Question-to-Context (Q2C) attention, i.e. which words in the context are most important to the query: ![ ](https://i.imgur.com/jOSo5TD.png)
+      - Forms a similar representation of the passage by summing over attention weights, except with added maximization over similarity scores
+    - For each passage position, output of BiDAF layer consists of passage word embeddings; C2Q vector; element-wise multiplication of passage word embeddings and C2Q vector; element-wise multiplication of passage word embeddings and Q2C vector
+  - Further LSTM modeling layer that uses deep Bi-LSTM over the passage using output of BiDAF layer
+  - Answer span selection:
+    - Start: Concatenate output of BiDAF and modelling layer and pass into a dense feed-forward layer, then apply softmax
+    - End: Put output of modelling layer through another Bi-LSTM, then concatenate that with BiDAF layer, pass into a dense feed-forward layer, then apply softmax
+
+## Lecture 11
+
+- Some problems with RNNs:
+  - RNNs cannot capture phrases without prefix context
+  - Often capture too much of last words in final vector
+- Convolutional Neural Networks
+  - Core idea: What if we compute vector representations for every possible word subsequence of a certain length?
+  - Classically used to extract features from images
+  - Want to be able to recognize things regardless of where they appear in an image, useful for position-invariant identification
+  - Discrete convolution: apply a weight vector (filter = kernel) onto a subset of an image, group up product of image and weights by summing, then output a convolved feature matrix
+- 1D Convolution for text
+  - Input: Dense word vector or one-hot encoding
+  - Apply a weight filter or kernel of some fixed size to the matrix of word vectors, grouping them together and outputting a convolved feature matrix
+  - Number of channels = Number of filters
+  - Problem: Convolved feature matrix will have smaller dimension than number of words
+    - Solution: Add padding, which are rows of 0s as start and end words so that the dimensions match up
+  - Hope the filters will be able to capture/specialize in different latent features encoded within the word vectors
+    - Capture polite words, food, etc.
+  - Max or average pooling over time: for each channel, take the maximum or average value (i.e. max value for each column in convolved feature matrix)
+  - If a feature is being activated more than once, maybe try k-max pooling over time: find the 2 highest values per channel and place in order they appear
+  - Dilation: Place convolved feature through another filter, creation convolutions that see a bigger spread of the sentence; or use a bigger kernel size
+  - As you have a greater depth of a CNN, it sees more latent patterns by being exposed to bigger patches of the sentence
+- PyTorch:
+
+```
+  batch_size = 16
+  word_embed_size = 4 # Dimension of word vectors
+  seq_len = 7 # Number of words
+  input = torch.randn(batch_size, word_embed_size, seq_len)
+  conv1 = Conv1d(in_channels = word_embed_size, out_channels = 3, kernel_size = 3) # Can add: padding = 1
+  hidden1 = conv1(input) # Hidden layer 1
+  hidden2 = torch.max(hidden1, dim = 2) # Max pool layer
+```
+
+- Single layer CNN for sentence classification:
+  - Goal: find out sentiment of sentence, or type of question being asked
+  - Use word vectors of length $k$
+  - Sentence representation made by concatenating all word vectors together
+  - Apply a convolution filter matrix $w \in \mathbb{R}^{h x k}$ to all possible windows of $h$ words
+  - To compute a feature (one channel) for the CNN layer: $c_i = f \left ( w^Tx_{i : i + h - 1} + b \right )$ using non-linear activation function $f$
+  - Result is a feature map $c = [c_1, c_2, ..., c_{n - h + 1}] \in \mathbb{R}^{n - h + 1}$
+  - Apply max pool layer that aims to capture most important activation $\hat c = \max(c)$
+  - Additions to try:
+    - Initialize with pre-trained word vectors
+    - Start with two copies of model, one only updates weights while the other also updates word vectors
+  - Final feature vector $z = [\hat c_1, ... \hat c_m]$, assuming $m$ filters in $w$
+  - Apply simple final softmax layer $y = \text{softmax} \left (W^{(s)} z + b \right )$ using its own weight matrix $W^{(s)}$ to output classification of classes
+- Regularization:
+  - Use dropout: create masking vector $r$ of Bernoulli random variables with probability $p$ of being 1
+  - Delete some features during training by applying $r$ onto weight matrix $W$ and final feature vector $z$: $y = \text{softmax} \left (W^{(s)} (r \circ z) + b \right )$
+  - This should prevent co-adaptation - overfitting to seeing specific organizations of features
+  - At test time, no dropout but scale final vector by probability $p$: $\hat W^{(s)} = pW^{(s)}$
+- Growing NLP toolkit:
+  - Bag of vectors: average out word vectors
+    - Good baseline for simple classification problems
+  - Window model: Good for single word classiication for problems that do no need wide context (like a whole paragraph) - NER, POS tagging
+  - CNNs: good for classification, need zero padding for shorter phrases, hard to interpret
+  - RNNs: cognitively plausible, not best for classification as you just use the last state, slower than CNNs, good for seqeuence tagging and classification, great for LMs, powerful when adding attention mechanisms
+- Bringing gating into CNNs
+  - Gating we saw in LSTMs and GRUs is a general idea that can be used vertically, i.e. between whole convolutional layers
+  - For very deep networks to work, we need the gradient to flow, so add a skip connection (identity) such that final output is a linear combination of previous and convolutional layer outputs
+    - Meant to learn what deviation there is between doing nothing (skip connection) and applying convolution
+  - An alternative: highway block
+    - Add two gates, one each in front of skip connection and convolutional layer
+- Batch normalization (BatchNorm)
+  - Often used in CNNs
+  - Transform the convolution output of a batch by scaling the activations to have zero mean and unit variance
+  - Makes models much more reliably trainable
+  - Use of BatchNorm makes models much less sensitive to parameter initialiation, since outputs are automatically rescaled
+  - Also tends to make tuning of learning rates simpler
+  - PyTorch: ```nn.BatchNorm1d```
+- 1x1 Convolutions a.k.a. Network-in-Network (NiN)
+  - Convolutional kernels with kernel size of 1
+  - A 1x1 convolution gives you a fully connected linear layer across channels
+  - It can be used to map from many channels to fewer channels
+  - Another cheap form of non-linearity
+  - 1x1 convolutions add additional neural network layers with very few additional parameters, unlike fully connected layers which add a lot of parameters
+- CNN application: Translation
+  - One of the first successful NMTs
+  - Use CNN for encoding and RNN for decoding
+- Learning character-level representations for POS tagging:
+  - Convolution over characters to generate word embeddings
+  - Fixed window of word embeddings used for PoS tagging
+- Very Deep Convolutional Networks for Text Classification
+  - Sequence models like LSTMs have been very dominant in NLP, but all the models are basically not very deep, not like models used in vision
+  - Works from the character level
+  - Breakthrough: use gated units vertically
+- RNNs are slow
+  - Problem: They are a standard building block for deep NLP
+  - Idea: Take the best and parallelizable parts of RNNs and CNNs
+  - Quasi-Recurrent Neural Network (QRNN):
+    - ![ ](https://i.imgur.com/VlhOF8d.png)
+    - Instead of calculating updates at each epoch that took some linear combination of previous state and current input, do it in one shot within the pooling layer: $h_t = f_t \circ h_{t - 1} + (1 - f_t) \circ z_t$
+    - Often better and faster than LSTMs, more interpretable
+
+## Lecture 12
+
+- Lately, NNs for NLP have started to look at parts of words instead of whole words
+- Phonetics and phonology:
+  - Phonetics: understanding the physics and physiology of human speak
+  - Phonology: human languages seem to use a small set of distinctive, categorial units called phonemes or distinctive features
+    - Out of the infinite possibile sounds the human mouth can make, languages are percevied to occupy a small subset of this that can be categorized
+  - These categorical sound distinctions are what our writing systems record
+- Morphology: parts of words
+  - The smallest semantic unit
+  - Minimal level of meaning that can be derived from our words
+  - Lots of words are complex but they can be broken up into these pieces of words unfortunately = unfortunate + ly = un + fortunate + ly
+  - An easy alternative is to work with character n-grams
+- Words in writing systems
+  - Writing systems vary in how they represent words - or don't
+  - E.g. no word segmentation (no spaces in Chinese)
+- Models below the word level
+  - Need to handle a large, open vocabulary with rich morphology (multiple parts to complicated words)
+  - Transliteration (Christopher $\rightarrow$ Krystof)
+  - Informal spelling
+  - We want to be able to handle these cases in our models
+- Character-level models
+  - We can still build a system that works over words, but we want to be able to create word representations for any character sequence
+  - We want to do it in a way that recognizes parts of the character sequence that look familiar so we can guess at unknown words
+  - Word embeddings can be composed from character embeddings
+  - Alternatively, do all of our language modeling on sequences of characters instead of words
+- Below the word: writing systems
+  - Most deep learning NLP work begins with language in its written form - it's the easily processed, found data
+  However, when you build your character model, it greatly depends on what writing system the language uses
+  - As we know, human language writing systems aren't one thing
+  - Some are phonemic - specific words have specific sounds
+  - English is fossilized phonemic - spelling does not match sounds
+  - Others are syllabic/moraic - syllables are represented by characters
+  - Ideographic (syllabic) - characters with particular meanings attached to them
+  - Combination of all above
+  - Character units carry different meanings across languages
+- Purely character-level NMT models
+  - Strong results via a deep convolutional stack (see previous lecture on Very Deep Convolutional Networks for Text Classification)
+  - Character models are very slow in RNNs due to huge sequences
+  - Can get very slow very quickly as more layers are added, also requires far more data than if training with just words
+- Sub-word models: two trends
+  - Same architecture for word-level model except use smaller units - instead of whole words use "word pieces"
+  - Hybrid architecutre: main model has words, something else for chaacters
+- Byte Pair Encoding (BPE)
+  - A way of representing pieces of words to create an infinite effective vocabulary while working with a finite vocabulary
+  - Compression algorithm: Starting with a collection of stuff in bytes, look for the most frequent sequence of 2 bytes, add it as a new element to the dictionary of possible values
+  - Apply compression algorithm as a way of coming up with pieces of words that were useful, doing it on characters and character n-grams
+  - Bottom-up clustering of short sequences
+  - Start with a unigram vocabulary of all unicode characters in data
+  - Look for most frequent ngram pairs, take note of frequency and add to vocabulary, then find the next most common ngram using current ngram, etc.
+  - Have a target vocabulary size and stop when you reach it
+  - When looking at a paragraph, do deterministic longest piece segmentation of words to create set of word pieces
+  - Run set through MT system as if it were whole words
+  - On output side, concatenate together as needed
+- BERT uses a variant of the wordpiece model
+  - Operates over word pieces
+  - Common words are in the vocabulary (at, 1910s, fairfax) but other words are built from wordpieces (hypatia = h + ##yp + ##ati + ###a)
+  - From this you effectively have word vectors for 4 word pieces (to group them into the single vector , you can average them or max pool)
+- Character-level to build word-level systems:
+  - Want to work with characters so you can leverage an infinite vocabulary but incorporate them into a bigger system
+  - These lower-level systems deal with character embeddings and combine them to create word representations to be fed into higher-level models
+  - Early attempt: start with characters, do convolution over characters to generate word embeddings, then use in a higher-level model for translation or POS tagging
+  - Later: run character-level bi-LSTMs, concatenate the final hidden states to form the word representation, which gets fed into a RNN language model
+- Key benefit of character-level models: If a word in a corpus to be trained is not in the vocabulary, then a word-level system will only output \<unk\>s and have to use attention to predict word. A character-level system can look for similar sub-sequences of characters in its larger vocabulary
+- Some take-aways of character-level models:
+  - Not necessary to use word embeddings as inputs for neural language modeling. Character-level embeddings can be more powerful
+  - CNNs + Highway (Identity) connections over characters can extract rich semantic and structural information
+  - You can compose "building blocks" to obtain nuances and powerful models (use bi-LSTM over characters or subsequences for character-level representations, plug into RNN as language model)
+- FastText embeddings: a next generation efficient word2vec-like word representation library but better for rare words and languages with lots of morphology
+  - Augments word2vec skip-gram model with character n-grams
+
+## Lecture 13
+
+- Dealing with \<unk\>s with word vectors
+  - At train time, train one vector to represent all \<unk\>s
+  - At runtime, out of vocabulary words are represented by \<unk\>
+  - Problem: Difficult to distinguish by meaning or context for different \<unk\> words
+  - Solution: use character-level models to build vectors
+  - Solution: If the \<unk\> word at test time appears in your unsupervised word embeddings, use that vector as is at test time
+    - Additionally, for other words, just assign them a random vector, effectively adding them to your vocabulary
+    - Alternatively, have different \<unk\> vectors for different word classes - unknown number, capitalized thing, etc. each have their own \<unk\> class
+- Representations of words
+  - Up until now, our only way of representing words is through word vectors generated from word2vec, GloVe, fastText
+  - Until recently, the big breakthrough was using pre-trained unsupervised word embeddings
+  - We can just start with random word vectors and train them on our task of interest
+  - But in most cases, use of pre-trained word vectors help, because we can train them for more words on much more data beforehand
+  - These have had problems:
+    - Always have the same representaton for a word type regardless of the context in which a word token occurs
+      - We might want very fine-grained word sense disambuigation
+      - We want to know the sense of a word inside a particular context of use (star - astronomical, star - Hollywood)
+    - We just have one representation for a word, but words have different aspects, including semantics, syntactic behavior and register/connotations
+      - Different times when a certain word is appropriate to use
+  - Maybe we've had a solution all along through LSTMs and RNNs
+    - In a neural language model, we immediately stuck word vectors through LSTM layers which are trained to predict the next word
+    - These langauge models are producing context-specific word representations at each position (the hidden state at that timestep)
+    - **Maybe we can extract those context-specific representations and use them**
+- TagLM - Pre-ELMo
+  - Want meaning of word in context but standardly learn through RNN only on small task-labeled data
+  - ![ ](https://i.imgur.com/KeRuPAh.png)
+  - Essentially two representations for each word to be fed into higer-level model: character representations and pre-trained fixed bi-LSTM language model representations where we feed in the whole word and output concatenated output states at each step
+- ELMo: Embeddings from Language Models
+  - Breakout version of word token vectors or contextual word vectors
+  - Learn word token vectors using long contexts not context windows (whole sentence or longer)
+  - Use 2 bi-LSTM layers and use all its layers in prediction
+  - Key difference from TagLM: instead of just using the output layer from the bi-LSTM, use all layers: for each word, calculate weighted average of concatenated hidden states, creating ELMo representation vector
+  - ![ ](https://i.imgur.com/KeRuPAh.png)
+  - Process:
+    - Run bi-LSTM to get representations for each word (ELMo representations)
+    - Freeze weights of ELMo for purposes of supervised model
+    - Concatenate ELMo weights into task-specific model
+  - Great for all tasks
+- ELMo: Weighting of layers
+  - The two bi-LSTM layers have different meanings
+  - Lower layer is better for lower-level syntax like for POS tagging, syntactic dependencies, NER
+  - Higher layer is better for higher-level semantics like sentiment, semantic role labeling, QA
+- Motivation for Transformers
+  - We want parallelization but RNNs are inherently sequential
+  - GPUs want parallelization to see large speed-ups
+  - We also saw previously that longer contexts play a huge role in increasing model's syntactic ability
+  - Despite GRUs and LSTMs, RNNs still need attention mechanism to deal with long-range dependencies - path length between states grows with sequence length
+  - But if attention gives us access to any state, maybe we can just use attention and don't need the RNN
+- Transfomer basics
+  - It uses attention everywhere to calculate things
+  - Inputs: a query q and a set of key-value pairs to an output
+  - Output: weighted sum of values where weight of each value is computed by an inner product of query and corresponding key
+  - $A(q, K, V) = \sum_i \dfrac{\exp{q \cdot k_i}}{\sum_j \exp{q \cdot k_j}} v_i$
+  - The word vectors themselves select each other
+  - Complete transformer block: multi-head attention and 2-layer feed-forward NN using ReLu and residual connections; repeat 6 times in a vertical stack
+- BERT: Bidirectional Encoder Representations from Transformers
+  - Use encoding from transformer network that is a good all-purpose representation for a whole sentence
+  - Problem: Language models only use left context or right context, but language understanding is bidirectional
+  - Solution: Mask out k\% of the input words, and then predict the masked words using the model
+    - They always use k = 15\%
+    - The man went to the \[MASK\] to buy a \[MASK\] of milk
+  - Then take this model pre-trained which will be very useful for any task and fine-tune it for the specific task you want
+    - Do this by replacing the top-most prediction with a simple classifier (if NER, do simple NER classifier)
+
+## Lecture 14
+
+- Recurrent Neural Networks
+  - Model of choice for learning variable-length repreesntations
+  - Natural fit for sentences and sequences of pixels
+  - LSTMs, GRUs and variants dominate recurrent models
+  - At each timestep, they produce a continious representation that is a summarization of everything that they've actually gone through
+- Problems with RNNs
+  - Sequential computation inhibits parallelization
+  - No explicit modeling of long and short range dependencies
+  - We want to model hierarchy (an important facet of language)
+  - RNNs with sequence-aligned states seem wasteful
+- Convolutional Neural Networks
+  - Trivial to parallelize per convolutional layer
+  - Exploits local dependencies because a single application of a convolution can consume all information inside its local receptive field
+  - "Interaction distance" between positions linear or logarithmic in depth $\rightarrow$ Long-distance dependencies require many layers
+- Attention: What part of the input should we focus on?
+  - Content-based memory retrieval system
+  - Why not use attention for representations?
+- Self-attention
+  - A position can interact with every position in the same word simultaneously
+  - How relevant is the ith word in the sentence relevant to other words in the same sentence
+  - Every word gets an attention vector relative to other words, creating a $n x n$ matrix where the diagonal elements are a word's attention relative to itself
+  - Gating/multiplicative interactions
+  - Trivial to parallelize by doing matrix multiplications
+- Multi-head attention
+  - Having a single self-attention vector may place too much focus on the word's attention relative to itself, making the vector useless
+  - Create multiple such attention vectors for each word relative to other words in the sentence
+  - Take a weighted average of every word's attention vectors to create the final attention vector
+- Transformer
+  - Positional Encoder: vector that gives context based on position of word in sentence $\rightarrow$ use a function based on position and dimension of model
+    - Google paper used sin and cosine for odd and even positioned words respectively
+  - Add input embedding of word to positional encoding in sentence to get the actual embedding to be used in encoder stage
+  - Encoder stage:
+    - Take input embedding with positional context and feed through multi-head attention block
+    - Sum output of attention block with residual connection and feed into feed-forward layer with its own residual connection
+    - Add output and residual, then normalize, creating output that is passed into decoder
+  - Decoder stage:
+    - Generate contextual embeddings for other language sentence then feed into masked multi-head attention where the mask gives $-\infty$ to words that occur after current word
+    - Feed output from encoder stage into another multi-head attention block, then add with masked output
+    - Pass combined vector into another feed-forwrd layer with residual connection
+    - Pass final output through linear layer (feed forward layer) that increases dimensionality to match number of possible outputs (size of vocabulary) classes, pass through softmax and output probabilities, selecting word with higest probability
+- Residuals carry positional information to higher layers, among other information
+
+
+
